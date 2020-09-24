@@ -9,6 +9,7 @@
 import socket
 import threading
 import sys
+import time
 
 # # # # # # # # # # # # #
 # HOST & PORT SETTINGS  #
@@ -19,6 +20,7 @@ PORT = 36337
 
 LFD_HOST = '127.0.0.1' # Local Fault Detector should be on this machine.
 LFD_PORT = 36338
+
 
 # # # # # # # # # # # # #
 # THREAD FUNCTION DEFNS #
@@ -43,10 +45,18 @@ def serve_client(conn, addr):
         print(num_enemies, " FORMICS REMAIN")
         num_enemies_lock.release()
 
+
 # Function to send out a heartbeat repeatedly at a given frequency.
 def send_heartbeat(frequency):
-    #TODO
-    pass
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as heartbeat_socket:
+        # Connect to the detector
+        heartbeat_socket.connect((LFD_HOST, LFD_PORT))
+        msg = "Server from PORT " + str(PORT) + " still alive."
+        heartbeat_msg = msg.encode()
+
+        while True:
+            heartbeat_socket.send(heartbeat_msg)
+            time.sleep(int(frequency))
 
 
 # # # # # # # # #
