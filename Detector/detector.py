@@ -24,9 +24,10 @@ LFD_PORT = 36338
 def serve_server(conn, addr):
     while True:
         # Wait for the server to send heartbeat msg.
-        x = conn.recv(40)
+        x = conn.recv(5)
         if x:
-            print(x)
+            server_port = int(x)
+            print('Server from port: ' + str(server_port) + ' is still alive.')
         else:
             break
 

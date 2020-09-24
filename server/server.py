@@ -50,18 +50,21 @@ def serve_client(conn, addr):
 def send_heartbeat(frequency):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as heartbeat_socket:
         # Connect to the detector
-        heartbeat_socket.connect((LFD_HOST, LFD_PORT))
+        try:
+            heartbeat_socket.connect((LFD_HOST, LFD_PORT))
 
-        # TODO
-        # Now just send heartbeat to local detector, should send through each
-        # replicated server later on
+            # TODO
+            # Now just send heartbeat to local detector, should send through each
+            # replicated server later on
 
-        msg = "Server from PORT " + str(PORT) + " still alive."
-        heartbeat_msg = msg.encode()
+            msg = str(PORT)
+            heartbeat_msg = msg.encode()
 
-        while True:
-            heartbeat_socket.send(heartbeat_msg)
-            time.sleep(int(frequency))
+            while True:
+                heartbeat_socket.send(heartbeat_msg)
+                time.sleep(int(frequency))
+        except Exception as e:
+            print("Please launch the local machine to test fault detector module.")
 
 
 # # # # # # # # #
