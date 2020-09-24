@@ -51,6 +51,11 @@ def send_heartbeat(frequency):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as heartbeat_socket:
         # Connect to the detector
         heartbeat_socket.connect((LFD_HOST, LFD_PORT))
+
+        # TODO
+        # Now just send heartbeat to local detector, should send through each
+        # replicated server later on
+
         msg = "Server from PORT " + str(PORT) + " still alive."
         heartbeat_msg = msg.encode()
 
