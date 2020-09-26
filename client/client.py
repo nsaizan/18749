@@ -8,6 +8,12 @@
 
 import socket
 import time
+import sys
+sys.path.append("..")
+
+# Custom imports
+from helper import Logger
+from helper import Messenger
 
 # # # # # # # # # # # # #
 # HOST & PORT SETTINGS  #
@@ -25,6 +31,12 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     # Connect to the server
     s.connect((HOST, PORT))
 
+    # Setup logger
+    logger = Logger()
+    messenger = Messenger(s, f'C{1}', 'S1', logger)
+
+    message_count = 0
+
     # Run until client closes the connection
     while(True):
         # Get user input
@@ -41,11 +53,8 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             print("ERROR: Input must be a valid integer")
             continue
             
-        data = attack_value.encode()
-        
-        # Send an attack.
-        print("Sending attack...")
-        s.send(data)
+        # Send and log the attack
+        messenger.send(attack_value)
 
     s.close()
 
