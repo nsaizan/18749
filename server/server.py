@@ -25,7 +25,8 @@ HOST = ''    #Accept connections on any IPv4 interface
 PORT = 36337
 
 LFD_HOST = '127.0.0.1' # Local Fault Detector should be on this machine.
-LFD_PORT = 36338
+LFD_HB_PORT = 36338 # Port for Heartbeat (LFD->S)
+LFD_R_PORT  = 36339 # Port for receipt   (S->LFD)
 
 HEARTBEAT_FREQ_DEFAULT = 3 # Frequency in Hz
 
@@ -58,39 +59,28 @@ def serve_client(conn, addr):
         num_enemies_lock.release()
 
 
-# Function to send out a heartbeat repeatedly at a given frequency.
-def send_heartbeat():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as heartbeat_socket:
-        logger = Logger()
+# Function to receive heartbeats and reply to them.
+def serve_LFD(hb_conn, addr):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as r_socket:
 
+        #Attempt to connect to the RECEIPT port.
+        while(r_socket.connect_ex((LFD_HOST, LFD_R_PORT))):
+            print("LFD Receipt Port Unavailable")
+            time.sleep(1);
+                
         try:
-            # Keep trying to connect to LFD til it is successful
-            while(heartbeat_socket.connect_ex((LFD_HOST, LFD_PORT)) != 0):
-                logger.info("Please start the LFD")
-                time.sleep(1)
-
-            messenger = Messenger(heartbeat_socket, 'S1', 'LFD1', logger)
-            messenger.info("Successfully Connected to LFD")
-
-            # TODO
-            # Now just send heartbeat to local detector, should send through each
-            # replicated server later on
-            count = 0
-
-            while True:
-                # Create unique message from source and a counter
-                msg = f"{PORT}{format(count, '05d')}"
-                count += 1
-
-                # Send and log the message
-                messenger.send(msg)
-
-                # Handle frequency
-                time.sleep(1/int(HEARTBEAT_FREQ_DEFAULT))
-
+            while(1):
+                # Wait for the client to send a 1-byte heartbeat. (Doesn't
+                # matter what it is)
+                msg = hb_conn.recv(1)
+                if msg:
+                    receipt = "HB received by server".encode()
+                    r_socket.send(receipt)     
+                
         except KeyboardInterrupt:
             print("Killing heartbeat thread.")
             exit()
+
 
 def main():
     # Open the top-level listening socket.
@@ -116,18 +106,13 @@ def main():
             # Wait (blocking) for connections.
             conn, addr = s.accept()
 
-            # Start a new thread to service the client.
-            server = threading.Thread(target=serve_client, args=(conn,addr))
+            # SEQUENTIALLY serve a new client.
+            serve_client(conn,addr)
+            #server = threading.Thread(target=serve_client, args=(conn,addr))
 
             server.start()
 
 if __name__ == '__main__':
-    # Parse heartbeat frequency from the CLI
-    if len(sys.argv) < 2:
-        freq = HEARTBEAT_FREQ_DEFAULT
-        print(f"Using the Default Heartbeat Frequency: {HEARTBEAT_FREQ_DEFAULT}")
-    else:
-        raise ValueError("Too Many CLI Arguments!")
 
     # Global variable num_enemies holds the number of enemies remaining.
     # This starts at 1000 and can be decremented by clients.
@@ -136,8 +121,22 @@ if __name__ == '__main__':
     # Protect this shared variable with a lock to prevent race conditions.
     num_enemies_lock = threading.Lock()
 
-    # Initialize heartbeat.
-    heartbeat = threading.Thread(target=send_heartbeat, args = ())
-    heartbeat.start()
+    print("Waiting for LFD...")
+    # Before we do anything, make sure the heartbeat is working.
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+
+        # Create the heartbeat port.
+        s.bind((LFD_HOST, LFD_HB_PORT))
+
+        # This should be a listening port.
+        s.listen()
+
+        # Get the HEARTBEAT connection.
+        conn, addr = s.accept()
+
+        #Kick off the LFD-server connection.
+        print("Connection with LFD established!")
+        heartbeat = threading.Thread(target=serve_LFD, args = (conn,addr))
+        heartbeat.start()
 
     main()

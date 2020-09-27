@@ -1,8 +1,8 @@
 #
-#    File: Server Application
+#    File: Local Fault Detector
 #  Author: aquinn, nsaizan, ranz2
 #   Group: TheEnemy'sGateIsDown
-#    Date: 9/14/2020
+#    Date: 9/27/2020
 #
 # Main code for our detector.
 
@@ -20,54 +20,95 @@ from server.server import HEARTBEAT_FREQ_DEFAULT
 # # # # # # # # # # # # #
 # LFD HOST & PORT SETTINGS  #
 # # # # # # # # # # # # #
+HOST = '127.0.0.1'
+PORT = 36337
 LFD_HOST = '127.0.0.1' # Local Fault Detector should be on this machine.
-LFD_PORT = 36338
+LFD_HB_PORT = 36338
+LFD_R_PORT = 36339
 
-TIMEOUT = 5 * HEARTBEAT_FREQ_DEFAULT # How long in seconds*Hz it takes to timeout
+#In units of the heartbeat period.
+NORMALIZED_TIMEOUT = 5
 
 logger = Logger()
+
+get_time = lambda: int(round(time.time() * 1000))
 
 # # # # # # # # # # # # #
 # THREAD FUNCTION DEFNS #
 # # # # # # # # # # # # #
 # Function to serve a single server.
-def serve_server(conn, addr, socket):
-    watchdog = TIMEOUT
-    messenger = Messenger(None, '', '', logger)
+def serve_LFD(conn, addr, frequency):
+
+    timeout = 1000 * NORMALIZED_TIMEOUT / frequency
+    last_receipt_time = int(round(time.time() * 1000))
+    
     while True:
-        # Wait for the server to send heartbeat msg.
-        msg = messenger.recv(conn, 20)
+
+        if get_time() - last_receipt_time > timeout:
+            print("AHHHH! THE SERVER IS DEAD!")
+            exit()
+            
+        # Wait for the server to send back receipt
+        x = conn.recv(25)
         
-        if msg:
-            watchdog = TIMEOUT
-            # TODO reset countdown to timeout
-        else:
-            watchdog -= 1
-            if (watchdog == 0):
-                messenger.error("Heartbeat timeout!")
+        if(x != b''):
+            last_receipt_time = get_time()
+            print(str(x))
+ 
+ 
+def send_heartbeat(frequency):
+    while True:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as heartbeat_socket:
+            # Connect to the server on the HB port.
+            while(heartbeat_socket.connect_ex((HOST, LFD_HB_PORT))):
+                  print("HB port not available.")
+                  time.sleep(1)
 
-        time.sleep(1/HEARTBEAT_FREQ_DEFAULT)
+            print('HB connection established')
+                # Now just send heartbeat to server, should send through each
+                # replicated server later on
 
+            try:
+                while True:
+                    heartbeat_socket.send(b'h')
+                    print('Heartbeat sent from LFD1 to S1')
+                    time.sleep(1/frequency)
+                    
+            except Exception as e:
+                print("Error while sending heartbeat. Quitting!")
+                return
+ 
+def receive_receipt():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        # Bind to the network port specified at top.
+        s.bind((HOST, LFD_R_PORT))
+ 
+        # This should be a listening port.
+        s.listen()
+ 
+        # Wait (blocking) for connections to the R port.
+        conn, addr = s.accept()
 
+        server = threading.Thread(target=serve_LFD, args=(conn, addr,freq))
+
+        server.start()
+ 
+ 
 # # # # #
 # MAIN  #
 # # # # #
-# Open the top-level listening socket.
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    # Bind to the network port specified at top.
-    s.bind((LFD_HOST, LFD_PORT))
+# Parse heartbeat frequency from the input
+if len(sys.argv) < 2:
+    raise ValueError("No Heartbeat Frequency Provided!")
+ 
+if len(sys.argv) > 2:
+    raise ValueError("Too Many CLI Arguments!")
+ 
+freq = int(sys.argv[1])
 
-    # This should be a listening port.
-    s.listen()
 
-    # Flavor Text
-    print("\nThis is the fault detector interface.")
-    print(" Should continue receiving heartbeat signal from server.")
-    # Run forever
-    while True:
-        # Wait (blocking) for connections.
-        conn, addr = s.accept()
+receipt = threading.Thread(target=receive_receipt, args = ())
+receipt.start() 
+heartbeat = threading.Thread(target=send_heartbeat, args = (freq,))
+heartbeat.start()
 
-        # Start a new thread to service the server.
-        server = threading.Thread(target=serve_server, args=(conn, addr, s))
-        server.start()
