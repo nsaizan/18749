@@ -23,9 +23,12 @@ from helper import Messenger
 
 HOST = ''    #Accept connections on any IPv4 interface
 PORT = 36337
+LFD_R_PORT = 36338 # Port for LFD to receive receipt
 
-LFD_HOST = '127.0.0.1' # Local Fault Detector should be on this machine.
-LFD_PORT = 36338
+# Local Fault Detector should be on the same machine as server
+
+# LFD_HOST = '127.0.0.1' # Local Fault Detector should be on this machine.
+# LFD_PORT = 36338
 
 HEARTBEAT_FREQ_DEFAULT = 3 # Frequency in Hz
 
@@ -51,19 +54,21 @@ def serve_client(conn, addr):
         else:
             continue
 
-        # x represents the number of enemies killed. 
-        num_enemies_lock.acquire()
+            # x represents the number of enemies killed.
+            num_enemies_lock.acquire()
         num_enemies = num_enemies - attack
         logger.info(f"{num_enemies} FORMICS REMAIN")
-        num_enemies_lock.release()
+            num_enemies_lock.release()
 
+        # Receiving heartbeat from LFD
+        except Exception as e:
+            print(str(x))
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 
-# Function to send out a heartbeat repeatedly at a given frequency.
+                # Send recipt back to LFD
 def send_heartbeat():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as heartbeat_socket:
         logger = Logger()
 
-        try:
             # Keep trying to connect to LFD til it is successful
             while(heartbeat_socket.connect_ex((LFD_HOST, LFD_PORT)) != 0):
                 logger.info("Please start the LFD")
@@ -72,15 +77,28 @@ def send_heartbeat():
             messenger = Messenger(heartbeat_socket, 'S1', 'LFD1', logger)
             messenger.info("Successfully Connected to LFD")
 
-            # TODO
-            # Now just send heartbeat to local detector, should send through each
-            # replicated server later on
+                receipt = "HB received by server".encode()
+                s.send(receipt)
             count = 0
 
-            while True:
+# Heartbeat should be sent by LFD
                 # Create unique message from source and a counter
                 msg = f"{PORT}{format(count, '05d')}"
                 count += 1
+#         try:
+#             heartbeat_socket.connect((LFD_HOST, LFD_PORT))
+#
+#             # Now just send heartbeat to local detector, should send through each
+#             # replicated server later on
+#
+#             msg = str(PORT)
+#             heartbeat_msg = msg.encode()
+#
+#             while True:
+#                 heartbeat_socket.send(heartbeat_msg)
+#                 time.sleep(int(frequency))
+#         except Exception as e:
+#             print("Please launch the local machine to test fault detector module.")
 
                 # Send and log the message
                 messenger.send(msg)

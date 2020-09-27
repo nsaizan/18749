@@ -20,8 +20,9 @@ from server.server import HEARTBEAT_FREQ_DEFAULT
 # # # # # # # # # # # # #
 # LFD HOST & PORT SETTINGS  #
 # # # # # # # # # # # # #
-LFD_HOST = '127.0.0.1' # Local Fault Detector should be on this machine.
-LFD_PORT = 36338
+HOST = '' # Local Fault Detector should be on the same machine as server
+PORT = 36337
+LFD_R_PORT = 36338 # Port for LFD to receive receipt
 
 TIMEOUT = 5 * HEARTBEAT_FREQ_DEFAULT # How long in seconds*Hz it takes to timeout
 
@@ -35,13 +36,12 @@ def serve_server(conn, addr, socket):
     watchdog = TIMEOUT
     messenger = Messenger(None, '', '', logger)
     while True:
-        # Wait for the server to send heartbeat msg.
+        # Wait for the server to send back receipt
         msg = messenger.recv(conn, 20)
         
         if msg:
             watchdog = TIMEOUT
             # TODO reset countdown to timeout
-        else:
             watchdog -= 1
             if (watchdog == 0):
                 messenger.error("Heartbeat timeout!")
@@ -49,25 +49,65 @@ def serve_server(conn, addr, socket):
         time.sleep(1/HEARTBEAT_FREQ_DEFAULT)
 
 
+def send_heartbeat(frequency):
+    while True:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as heartbeat_socket:
+            # Connect to the detector
+            try:
+                heartbeat_socket.connect((HOST, PORT))
+                Flag_e = 1
+
+                # Now just send heartbeat to server, should send through each
+                # replicated server later on
+
+                msg = "HB sent from LFD"
+                heartbeat_msg = msg.encode()
+
+                while True:
+                    heartbeat_socket.send(heartbeat_msg)
+                    print(msg)
+                    time.sleep(int(frequency))
+            except Exception as e:
+                if Flag_e:
+                    print("Time out, server crashed")
+                    Flag_e = 0
+                heartbeat_socket.close()
+
+
+def receive_receipt():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        # Bind to the network port specified at top.
+        s.bind((HOST, LFD_R_PORT))
+
+        # This should be a listening port.
+        s.listen()
+
+    print("\nThis is the fault detector interface.")
+    print(" Should continue receiving heartbeat signal from server.")
+        while True:
+            # Wait (blocking) for connections.
+            conn, addr = s.accept()
+
+            # Start a new thread to service the client.
+        server = threading.Thread(target=serve_server, args=(conn, addr, s))
+
+            server.start()
+
+
 # # # # #
 # MAIN  #
 # # # # #
-# Open the top-level listening socket.
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    # Bind to the network port specified at top.
-    s.bind((LFD_HOST, LFD_PORT))
+# Parse heartbeat frequency from the input
+if len(sys.argv) < 2:
+    raise ValueError("No Heartbeat Frequency Provided!")
 
-    # This should be a listening port.
-    s.listen()
+if len(sys.argv) > 2:
+    raise ValueError("Too Many CLI Arguments!")
 
-    # Flavor Text
-    print("\nThis is the fault detector interface.")
-    print(" Should continue receiving heartbeat signal from server.")
-    # Run forever
-    while True:
-        # Wait (blocking) for connections.
-        conn, addr = s.accept()
+freq = sys.argv[1]
 
-        # Start a new thread to service the server.
-        server = threading.Thread(target=serve_server, args=(conn, addr, s))
-        server.start()
+
+heartbeat = threading.Thread(target=send_heartbeat, args = (freq,))
+heartbeat.start()
+receipt = threading.Thread(target=receive_receipt, args = ())
+receipt.start()
