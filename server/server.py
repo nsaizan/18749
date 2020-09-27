@@ -52,6 +52,13 @@ def serve_client(conn, addr):
         # Receiving heartbeat from LFD
         except Exception as e:
             print(str(x))
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+
+                # Send recipt back to LFD
+                s.connect((HOST, LFD_R_PORT))
+
+                receipt = "HB received by server".encode()
+                s.send(receipt)
 
 
 # Heartbeat should be sent by LFD

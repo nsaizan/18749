@@ -23,6 +23,14 @@ LFD_R_PORT = 36338 # Port for LFD to receive receipt
 # THREAD FUNCTION DEFNS #
 # # # # # # # # # # # # #
 # Function to serve a single server.
+def serve_LFD(conn, addr):
+    while True:
+        # Wait for the server to send back receipt
+        x = conn.recv(25)
+        if(x != b''):
+            print(str(x))
+
+
 def send_heartbeat(frequency):
     while True:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as heartbeat_socket:
@@ -31,11 +39,10 @@ def send_heartbeat(frequency):
                 heartbeat_socket.connect((HOST, PORT))
                 Flag_e = 1
 
-                # TODO
-                # Now just send heartbeat to local detector, should send through each
+                # Now just send heartbeat to server, should send through each
                 # replicated server later on
 
-                msg = "HB from PORT: " + str(PORT)
+                msg = "HB sent from LFD"
                 heartbeat_msg = msg.encode()
 
                 while True:
@@ -44,9 +51,27 @@ def send_heartbeat(frequency):
                     time.sleep(int(frequency))
             except Exception as e:
                 if Flag_e:
-                    print("The server crashed.")
+                    print("Time out, server crashed")
                     Flag_e = 0
                 heartbeat_socket.close()
+
+
+def receive_receipt():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        # Bind to the network port specified at top.
+        s.bind((HOST, LFD_R_PORT))
+
+        # This should be a listening port.
+        s.listen()
+
+        while True:
+            # Wait (blocking) for connections.
+            conn, addr = s.accept()
+
+            # Start a new thread to service the client.
+            server = threading.Thread(target=serve_LFD, args=(conn, addr))
+
+            server.start()
 
 
 # # # # #
@@ -64,3 +89,5 @@ freq = sys.argv[1]
 
 heartbeat = threading.Thread(target=send_heartbeat, args = (freq,))
 heartbeat.start()
+receipt = threading.Thread(target=receive_receipt, args = ())
+receipt.start()
