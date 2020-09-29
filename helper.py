@@ -29,7 +29,7 @@ class Messenger:
         self.socket = socket
         self.us = us
         self.them = them
-        if logger:
+        if logger == None:
             self.logger = Logger()
         else:
             self.logger = logger
@@ -52,26 +52,26 @@ class Messenger:
         self.log_send(data)
 
     def recv(self, conn, msg_len):
-        try:
+        #try:
             # Check for incoming message
-            msg = str(conn.recv(msg_len))[2:-1] # Need to remove the b'x' formatting
-            if (msg):
-                # Get message source, dest, content
-                args = msg.split("::")
-                self.them = args[0]
-                self.us = args[1]
-                data = args[2]
+        msg = str(conn.recv(msg_len))[2:-1] # Need to remove the b'x' formatting
+        if (msg):
+            # Get message source, dest, content
+            args = msg.split("::")
+            self.them = args[0]
+            self.us = args[1]
+            data = args[2]
 
-                # Log the message
-                self.log_recv(data)
+            # Log the message
+            self.log_recv(data)
 
-                result = data
-            else:
-                result = None
-
-        except:
-            self.logger.error("Message recv failed!")
+            result = data
+        else:
             result = None
+
+        #except:
+        #    self.logger.error("Message recv failed!")
+        #    result = None
             
         return result
 

@@ -56,6 +56,11 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         # Send and log the attack
         messenger.send(attack_value)
 
+        # Wait to receive a reply (will be logged automatically) 
+        while(not (messenger.recv(s, 1024))):
+            pass
+        
+        
     s.close()
 
         

@@ -11,6 +11,8 @@ import socket
 import threading
 import sys
 import time
+import select
+import traceback
 sys.path.append("..")
 
 # Custom imports
@@ -26,60 +28,79 @@ PORT = 36337
 
 LFD_HOST = '127.0.0.1' # Local Fault Detector should be on this machine.
 LFD_HB_PORT = 36338 # Port for Heartbeat (LFD->S)
-LFD_R_PORT  = 36339 # Port for receipt   (S->LFD)
+#LFD_R_PORT  = 36339 # Port for receipt   (S->LFD)
 
-HEARTBEAT_FREQ_DEFAULT = 3 # Frequency in Hz
+MAX_MSG_LEN = 1024 #Max number of bytes we're willing to receive at once.
+
+SERVE_CLIENT_PERIOD = 0.01 #seconds
 
 
 # # # # # # # # # # # # #
 # THREAD FUNCTION DEFNS #
 # # # # # # # # # # # # #
 # Function to serve a single client.
-def serve_client(conn, addr):
+def serve_clients():
     # Ensure that we are referencing the global num_enemies
     global num_enemies
-    global num_enemies_lock
+    global clients_lock
 
     logger = Logger()
     messenger = Messenger(None, '', '', logger)
 
-    while(1):
-        # Wait for the client to send a single byte.
-        msg = messenger.recv(conn, 9)
+    try: 
+        while(1):
 
-        if msg: 
-            attack = int(msg)
-        else:
-            continue
+            while(not clients):
+                pass
 
-        # x represents the number of enemies killed. 
-        num_enemies_lock.acquire()
-        num_enemies = num_enemies - attack
-        logger.info(f"{num_enemies} FORMICS REMAIN")
-        num_enemies_lock.release()
+            #Give the main loop time to get more clients.
+            time.sleep(SERVE_CLIENT_PERIOD)
 
+            clients_lock.acquire()
+            readable,writable,exceptional = select.select(clients,[],[],0)
+
+            for conn in readable:
+
+                # Get the message from the client.
+                msg = messenger.recv(conn, MAX_MSG_LEN)
+
+                if msg: 
+                    attack = int(msg)
+                else:
+                    continue
+
+                # x represents the number of enemies killed.
+                logger.info(f"Before Request: S={num_enemies}")
+                num_enemies = num_enemies - attack
+                logger.info(f"After Request: S={num_enemies}")
+
+                messenger.socket = conn
+                messenger.send(f"{num_enemies} FORMICS REMAIN")
+
+            clients_lock.release()
+    except Exception as e:
+        traceback.print_exc()
+        #If something happens to the client-serving part of the server,
+        #everything should die.
+        thread.interrupt_main()
+        return
 
 # Function to receive heartbeats and reply to them.
 def serve_LFD(hb_conn, addr):
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as r_socket:
+    #with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as r_socket:
 
-        #Attempt to connect to the RECEIPT port.
-        while(r_socket.connect_ex((LFD_HOST, LFD_R_PORT))):
-            print("LFD Receipt Port Unavailable")
-            time.sleep(1);
+    messenger = Messenger(hb_conn, 'S1', 'LFD1')
                 
-        try:
-            while(1):
-                # Wait for the client to send a 1-byte heartbeat. (Doesn't
-                # matter what it is)
-                msg = hb_conn.recv(1)
-                if msg:
-                    receipt = "HB received by server".encode()
-                    r_socket.send(receipt)     
-                
-        except KeyboardInterrupt:
-            print("Killing heartbeat thread.")
-            exit()
+    try:
+        while(1):
+            # Wait for the client to send a heartbeat and echo it back.
+            msg = messenger.recv(hb_conn, MAX_MSG_LEN)
+            if msg:
+                messenger.send(msg)     
+
+    except KeyboardInterrupt:
+        print("Killing heartbeat thread.")
+        exit()
 
 
 def main():
@@ -100,17 +121,21 @@ def main():
         print("<<< WELCOME, COMMANDER >>>")
         print("\nAnd remember, this is just a game.")
         print(num_enemies, "FORMICS REMAIN")
+
+        server = threading.Thread(target=serve_clients, args=(), daemon=True)
+        server.start();
+        
         #Run forever
         while True:
             
             # Wait (blocking) for connections.
             conn, addr = s.accept()
 
-            # SEQUENTIALLY serve a new client.
-            serve_client(conn,addr)
-            #server = threading.Thread(target=serve_client, args=(conn,addr))
-
-            server.start()
+            clients_lock.acquire()
+            clients.append(conn)
+            clients_lock.release()
+            
+         
 
 if __name__ == '__main__':
 
@@ -119,9 +144,14 @@ if __name__ == '__main__':
     num_enemies = 1000
 
     # Protect this shared variable with a lock to prevent race conditions.
-    num_enemies_lock = threading.Lock()
+    #num_enemies_lock = threading.Lock()
+
+    clients = []
+
+    clients_lock = threading.Lock()
 
     print("Waiting for LFD...")
+    
     # Before we do anything, make sure the heartbeat is working.
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 
@@ -136,7 +166,10 @@ if __name__ == '__main__':
 
         #Kick off the LFD-server connection.
         print("Connection with LFD established!")
-        heartbeat = threading.Thread(target=serve_LFD, args = (conn,addr))
+
+        #Make the heartbeat thread a daemon thread so it dies if the rest of
+        #the program goes down.
+        heartbeat = threading.Thread(target=serve_LFD, args = (conn,addr), daemon=True)
         heartbeat.start()
 
     main()
