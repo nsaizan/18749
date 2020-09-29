@@ -64,8 +64,13 @@ def serve_clients():
                 # Get the message from the client.
                 msg = messenger.recv(conn, MAX_MSG_LEN)
 
-                if msg: 
-                    attack = int(msg)
+                if msg:
+                    try: 
+                        attack = int(msg.split(')')[1])
+                        req_num = int(msg.split(')')[0].split('#')[1])
+                    except (IndexError, ValueError) as e:
+                        logger.error('Bad message from client.')
+                        continue
                 else:
                     continue
 
@@ -75,7 +80,7 @@ def serve_clients():
                 logger.info(f"After Request: S={num_enemies}")
 
                 messenger.socket = conn
-                messenger.send(f"{num_enemies} FORMICS REMAIN")
+                messenger.send(f"(Req#{req_num}){num_enemies} FORMICS REMAIN")
 
             clients_lock.release()
     except Exception as e:
@@ -107,6 +112,9 @@ def main():
     # Open the top-level listening socket.
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 
+        #Set the socket address so it can be reused without a timeout.
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        
         # Bind to the network port specified at top.
         s.bind((HOST, PORT))
 
@@ -126,16 +134,23 @@ def main():
         server.start();
         
         #Run forever
-        while True:
+        try:
+            while True:
             
-            # Wait (blocking) for connections.
-            conn, addr = s.accept()
+                # Wait (blocking) for connections.
+                conn, addr = s.accept()
 
-            clients_lock.acquire()
-            clients.append(conn)
-            clients_lock.release()
-            
-         
+                clients_lock.acquire()
+                clients.append(conn)
+                clients_lock.release()
+        except Exception as e: 
+            traceback.print_exc()
+            s.shutdown()
+            s.close() #Gracefully exit by closing s & all connections.
+            for conn in clients:
+                conn.shutdown()
+                conn.close()
+            return
 
 if __name__ == '__main__':
 
@@ -155,6 +170,9 @@ if __name__ == '__main__':
     # Before we do anything, make sure the heartbeat is working.
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 
+        #Set the socket address so it can be reused without a timeout.
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        
         # Create the heartbeat port.
         s.bind((LFD_HOST, LFD_HB_PORT))
 

@@ -25,7 +25,18 @@ PORT = 36337
 # # # # # 
 # MAIN  #
 # # # # #
-# Open the top-level listening socket.
+# Parse heartbeat frequency from the input
+if len(sys.argv) < 2:
+    raise ValueError("No Client Number Provided!")
+ 
+if len(sys.argv) > 2:
+    raise ValueError("Too Many CLI Arguments!")
+ 
+client_num = int(sys.argv[1])
+
+request_num = 0
+
+# Open the connection to the server.
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 
     # Connect to the server
@@ -33,7 +44,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 
     # Setup logger
     logger = Logger()
-    messenger = Messenger(s, f'C{1}', 'S1', logger)
+    messenger = Messenger(s, f'C{client_num}', 'S1', logger)
 
     message_count = 0
 
@@ -54,7 +65,8 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             continue
             
         # Send and log the attack
-        messenger.send(attack_value)
+        request_num = request_num + 1
+        messenger.send(f"(Req#{request_num}) {attack_value}")
 
         # Wait to receive a reply (will be logged automatically) 
         while(not (messenger.recv(s, 1024))):

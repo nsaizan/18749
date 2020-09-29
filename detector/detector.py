@@ -101,7 +101,7 @@ if len(sys.argv) < 2:
 if len(sys.argv) > 2:
     raise ValueError("Too Many CLI Arguments!")
  
-freq = int(sys.argv[1])
+freq = float(sys.argv[1])
 
 while True:
 
