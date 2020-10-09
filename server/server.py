@@ -18,22 +18,14 @@ sys.path.append("..")
 # Custom imports
 from helper import Logger
 from helper import Messenger
+from ports  import ports
+from ports  import HOST
 
-# # # # # # # # # # # # #
-# HOST & PORT SETTINGS  #
-# # # # # # # # # # # # #
-
-HOST = ''    #Accept connections on any IPv4 interface
-PORT = 36337
-
-LFD_HOST = '127.0.0.1' # Local Fault Detector should be on this machine.
-LFD_HB_PORT = 36338 # Port for Heartbeat (LFD->S)
-#LFD_R_PORT  = 36339 # Port for receipt   (S->LFD)
+MY_NAME = "" #Determined at runtime.
 
 MAX_MSG_LEN = 1024 #Max number of bytes we're willing to receive at once.
 
 SERVE_CLIENT_PERIOD = 0.01 #seconds
-
 
 # # # # # # # # # # # # #
 # THREAD FUNCTION DEFNS #
@@ -116,7 +108,7 @@ def main():
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         
         # Bind to the network port specified at top.
-        s.bind((HOST, PORT))
+        s.bind((HOST, ports[f"{MY_NAME}_LISTEN"]))
 
         # This should be a listening port.
         s.listen()
@@ -152,7 +144,21 @@ def main():
                 conn.close()
             return
 
+
+
+        
 if __name__ == '__main__':
+
+    # Parse replica number from CLI
+    if len(sys.argv) < 2:
+        raise ValueError("No Replica Number Provided!")
+
+    if len(sys.argv) > 2:
+        raise ValueError("Too Many CLI Arguments!")
+
+    replica_num = int(sys.argv[1])
+
+    MY_NAME = "S" + str(replica_num)
 
     # Global variable num_enemies holds the number of enemies remaining.
     # This starts at 1000 and can be decremented by clients.
@@ -165,7 +171,7 @@ if __name__ == '__main__':
 
     clients_lock = threading.Lock()
 
-    print("Waiting for LFD...")
+    print(f"{MY_NAME} Waiting for LFD...")
     
     # Before we do anything, make sure the heartbeat is working.
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -174,7 +180,7 @@ if __name__ == '__main__':
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         
         # Create the heartbeat port.
-        s.bind((LFD_HOST, LFD_HB_PORT))
+        s.bind((HOST, ports[f"{MY_NAME}_HB"]))
 
         # This should be a listening port.
         s.listen()

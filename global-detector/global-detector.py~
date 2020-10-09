@@ -1,0 +1,10 @@
+#
+#    File: Local Fault Detector
+#  Author: aquinn, nsaizan, ranz2
+#   Group: TheEnemy'sGateIsDown
+#    Date: 10/9/2020
+#
+# Main code for our global fault detector.
+
+import socket
+

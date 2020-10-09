@@ -14,18 +14,20 @@ sys.path.append("..")
 # Custom imports
 from helper import Logger
 from helper import Messenger
+from ports  import HOST
+from ports  import ports
 
 # # # # # # # # # # # # #
 # HOST & PORT SETTINGS  #
 # # # # # # # # # # # # #
 
-HOST = ''    # Accept connections on any IPv4 interface
-PORT = 36337
+#HOST = ''    # Accept connections on any IPv4 interface
+#PORT = 36337
 
 # # # # # 
 # MAIN  #
 # # # # #
-# Parse heartbeat frequency from the input
+# Parse client number from CLI
 if len(sys.argv) < 2:
     raise ValueError("No Client Number Provided!")
  
@@ -40,7 +42,7 @@ request_num = 0
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 
     # Connect to the server
-    s.connect((HOST, PORT))
+    s.connect((HOST, ports["S1_LISTENING"]))
 
     # Setup logger
     logger = Logger()

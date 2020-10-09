@@ -4,7 +4,7 @@
 #   Group: TheEnemy'sGateIsDown
 #    Date: 9/27/2020
 #
-# Main code for our detector.
+# Main code for our local fault detector.
 
 import socket
 import threading
@@ -15,28 +15,33 @@ sys.path.append("..")
 # Custom imports
 from helper import Logger
 from helper import Messenger
+from ports  import ports
+from ports  import HOST
 
 # # # # # # # # # # # # #
 # LFD HOST & PORT SETTINGS  #
 # # # # # # # # # # # # #
-HOST = '127.0.0.1'     # Host for the server (this PC)
-PORT = 36337           # Main Server Port
-LFD_HOST = '127.0.0.1' # Local Fault Detector should be on this machine.
-LFD_HB_PORT = 36338    # Heartbeat port (LFD->S)
-LFD_R_PORT = 36339     # Heartbeat receipt port (S->LFD)
+#HOST = '127.0.0.1'     # Host for the server (this PC)
+#PORT = 36337           # Main Server Port
+#LFD_HOST = '127.0.0.1' # Local Fault Detector should be on this machine.
+#LFD_HB_PORT = 36338    # Heartbeat port (LFD->S)
+#LFD_R_PORT = 36339     # Heartbeat receipt port (S->LFD)
 
 #In units of the heartbeat period.
 #i.e. for a value of 5, the detector will time out if 5 heartbeat periods
 #pass without receiving a receipt.
 NORMALIZED_TIMEOUT = 5
 
-#Hardcoded for now, change these when we have >1 replica.
-MY_NAME = 'LFD1'
-MY_SERVER = 'S1'
+MAX_MSG_LEN = 1024 #Max number of bytes we're willing to receive at once.
+
+#Determined at runtime
+MY_NAME = "" 
+MY_SERVER = ""
 
 #Logger instance for the LFD
 lfd_logger = Logger()
-lfd_messenger = Messenger(None, MY_NAME, MY_SERVER, lfd_logger)
+hb_messenger = Messenger(None, MY_NAME, MY_SERVER, lfd_logger)
+gfd_messenger = Messenger(None, MY_NAME, "GFD"    , lfd_logger)
 
 #Macro to get a timestamp in ms.
 get_time = lambda: int(round(time.time() * 1000))
@@ -63,7 +68,7 @@ def get_receipts(frequency, hb_conn):
                 return
 
             # Wait for the server to send back receipt
-            x = lfd_messenger.recv(hb_conn,25)
+            x = hb_messenger.recv(hb_conn,25)
 
             #If we receive a heartbeat back from the server.
             if(x):
@@ -82,26 +87,63 @@ def send_heartbeat(frequency, hb_conn):
     try:
         while True:
             hb_sent_num = hb_sent_num+1
-            lfd_messenger.send(f"Heartbeat {hb_sent_num}")
+            hb_messenger.send(f"Heartbeat {hb_sent_num}")
             time.sleep(1/frequency)
 
     except Exception as e:
         lfd_logger.warning("Error while sending heartbeat! (Connection may have closed.)")
         return
 
- 
+
+# Function to receive heartbeats from the GFD and reply to them.
+def serve_GFD(gfd_conn):
+      
+    try:
+        while(1):
+            # Wait for the client to send a heartbeat and echo it back.
+            msg = gfd_messenger.recv(gfd_conn, MAX_MSG_LEN)
+            if msg:
+                gfd_messenger.send(msg)     
+
+    except KeyboardInterrupt:
+        print("Killing GFD heartbeat thread.")
+        exit()
  
 # # # # #
 # MAIN  #
 # # # # #
 # Parse heartbeat frequency from the input
 if len(sys.argv) < 2:
+    raise ValueError("No Replica Number Provided!")
+
+if len(sys.argv) < 3:
     raise ValueError("No Heartbeat Frequency Provided!")
  
-if len(sys.argv) > 2:
+if len(sys.argv) > 3:
     raise ValueError("Too Many CLI Arguments!")
- 
-freq = float(sys.argv[1])
+
+replica_num = int(sys.argv[1])
+freq = float(sys.argv[2])
+
+MY_NAME = "LFD" + str(replica_num)
+MY_SERVER = "S" + str(replica_num)
+
+
+
+
+#Once in the beginning we connect to the GFD. The GFD is a single point of
+#failure, so we don't anticipate ever having to re-connect to it.
+gfd_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+while(gfd_socket.connect_ex((HOST, ports["GFD_LISTEN"]))):
+    lfd_logger.warning("GFD not available.")
+    time.sleep(1)
+
+lfd_logger.info('Registered with the GFD.')
+gfd_messenger.socket = gfd_socket
+
+gfd_heartbeat = threading.Thread(target=serve_GFD, args = (gfd_socket,))
+gfd_heartbeat.start()
 
 while True:
 
@@ -109,12 +151,12 @@ while True:
     hb_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     # Connect to the server on the HB socket.
-    while(hb_socket.connect_ex((HOST, LFD_HB_PORT))):
+    while(hb_socket.connect_ex((HOST, ports[MY_SERVER+"_HB"]))):
         lfd_logger.warning("HB port not available.")
         time.sleep(1)
 
     lfd_logger.info('HB connection established')
-    lfd_messenger.socket = hb_socket
+    hb_messenger.socket = hb_socket
     
     #Set up function to continuously send heartbeats.
     heartbeat = threading.Thread(target=send_heartbeat, args = (freq,hb_socket))
