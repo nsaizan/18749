@@ -26,6 +26,8 @@ get_time = lambda: int(round(time.time() * 1000))
 #pass without receiving a receipt.
 NORMALIZED_TIMEOUT = 5
 
+MAX_MSG_LEN = 1024 #Max number of bytes we're willing to receive at once.
+
 member_count = 0
 membership   = []
 lfd_conns = []
@@ -34,11 +36,46 @@ members_lock = threading.Lock()
 
 gfd_logger = Logger()
 
+def add_member(server):
+    global member_count
+    global membership
+    global members_lock
+
+    members_lock.acquire()
+
+    if server in membership:
+        gfd_logger.warning(f"Server {server} is already a member")
+    else:
+        membership.append(server)
+        membership.sort()
+        member_count += 1
+        membership_string = ", ".join(membership)
+        gfd_logger.info(f"GFD: {member_count} members: {membership_string}")
+
+    members_lock.release()
+
+def delete_member(server):
+    global member_count
+    global membership
+    global members_lock
+
+    members_lock.acquire()
+
+    if server in membership:
+        membership.remove(server)
+        member_count -= 1
+        membership_string = ", ".join(membership)
+        gfd_logger.info(f"GFD: {member_count} members: {membership_string}")
+    else:
+        gfd_logger.warning(f"Server {server} is not a member")
+
+    members_lock.release()
+
 # Continuously wait to receive receipts on a specified connection.
 # If no receipt is received before the timeout, throw an error and exit.
-def get_receipts(frequency, hb_conn, my_lfd):
+def get_receipts(frequency, hb_conn, messenger):
 
-    hb_messenger = Messenger(hb_conn, "GFD", my_lfd, gfd_logger)
+    hb_messenger = messenger
     
     timeout = 1000 * NORMALIZED_TIMEOUT / frequency
     last_receipt_time = get_time()
@@ -51,22 +88,35 @@ def get_receipts(frequency, hb_conn, my_lfd):
                 hb_conn.close()
                 return
 
-            # Wait for the server to send back receipt
-            x = hb_messenger.recv(hb_conn,25)
+            # Wait for the LFD to send back receipt
+            x = hb_messenger.recv(hb_conn)
 
-            #If we receive a heartbeat back from the server.
             if(x):
-                last_receipt_time = get_time()
+                # Check if this is a heartbeat.
+                if("Heartbeat" in x):
+                    last_receipt_time = get_time()
+                # Check if this is an add membership request
+                elif("add" in x):
+                    args = x.split(" ")
+                    requestor = args[0][0:4]
+                    server_to_add = args[3]
+                    add_member(server_to_add)
+                # Check if this is a delete membership request
+                elif("delete" in x):
+                    args = x.split(" ")
+                    requestor = args[0][0:4]
+                    server_to_delete = args[3]
+                    delete_member(server_to_delete)
 
         except Exception as e:
             gfd_logger.warning("Error while getting receipt! (Connection may have closed.)")
             traceback.print_exc()
             return
 
-def heartbeat_one_lfd(frequency, hb_conn, my_lfd):
+def heartbeat_one_lfd(frequency, hb_conn, messenger):
     #Local hb number for each thread.
     hb_sent_num = 0
-    hb_messenger = Messenger(hb_conn, "GFD", my_lfd, gfd_logger)
+    hb_messenger = messenger
     
     try:
         while True:
@@ -106,14 +156,15 @@ def main(freq):
                 # Wait (blocking) for connections from LFDs
                 conn, addr = s.accept()
 
-                my_lfd = "LFD??" #TODO
+                hb_messenger = Messenger(conn, "GFD", "", gfd_logger)
+                hb_messenger.recv(conn)
 
                 #Kick off two threads: one to send heartbeats to this
                 #particular LFD, and the other to get receipts back.
-                heartbeat = threading.Thread(target=heartbeat_one_lfd, args = (freq,conn,my_lfd))
+                heartbeat = threading.Thread(target=heartbeat_one_lfd, args = (freq, conn, hb_messenger))
                 heartbeat.start()
                 
-                receipts = threading.Thread(target=get_receipts, args=(freq,conn,my_lfd))
+                receipts = threading.Thread(target=get_receipts, args=(freq, conn, hb_messenger))
                 receipts.start()
 
                 
@@ -130,17 +181,15 @@ def main(freq):
                 conn.close()
             return
 
+if __name__ == '__main__':
 
-# # # # #
-# MAIN  #
-# # # # #
-# Parse heartbeat frequency from the input
-if len(sys.argv) < 2:
-    raise ValueError("No Heartbeat Frequency Provided!")
- 
-if len(sys.argv) > 2:
-    raise ValueError("Too Many CLI Arguments!")
- 
-freq = float(sys.argv[1])
+    # Parse heartbeat frequency from the input
+    if len(sys.argv) < 2:
+        raise ValueError("No Heartbeat Frequency Provided!")
+    
+    if len(sys.argv) > 2:
+        raise ValueError("Too Many CLI Arguments!")
+    
+    freq = float(sys.argv[1])
 
-main(freq)
+    main(freq)
