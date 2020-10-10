@@ -54,7 +54,7 @@ def serve_clients():
             for conn in readable:
 
                 # Get the message from the client.
-                msg = messenger.recv(conn, MAX_MSG_LEN)
+                msg = messenger.recv(conn)
 
                 if msg:
                     try: 
@@ -86,12 +86,12 @@ def serve_clients():
 def serve_LFD(hb_conn, addr):
     #with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as r_socket:
 
-    messenger = Messenger(hb_conn, 'S1', 'LFD1')
+    messenger = Messenger(hb_conn, 'S1', '')
                 
     try:
         while(1):
             # Wait for the client to send a heartbeat and echo it back.
-            msg = messenger.recv(hb_conn, MAX_MSG_LEN)
+            msg = messenger.recv(hb_conn)
             if msg:
                 messenger.send(msg)     
 

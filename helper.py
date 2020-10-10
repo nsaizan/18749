@@ -42,6 +42,10 @@ class Messenger:
         data = message
         message = f"{metadata}{message}"
 
+        # Pad message
+        message = f"{message}::"
+        message = f"{message:<1024}"
+
         # Encode message
         message = message.encode()
 
@@ -51,10 +55,10 @@ class Messenger:
         # Log the message
         self.log_send(data)
 
-    def recv(self, conn, msg_len):
+    def recv(self, conn):
         #try:
             # Check for incoming message
-        msg = str(conn.recv(msg_len))[2:-1] # Need to remove the b'x' formatting
+        msg = str(conn.recv(1024))[2:-1] # Need to remove the b'x' formatting
         if (msg):
             # Get message source, dest, content
             args = msg.split("::")
@@ -68,10 +72,6 @@ class Messenger:
             result = data
         else:
             result = None
-
-        #except:
-        #    self.logger.error("Message recv failed!")
-        #    result = None
             
         return result
 
