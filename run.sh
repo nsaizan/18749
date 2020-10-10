@@ -1,0 +1,8 @@
+export PYTHONPATH="${PYTHONPATH}:$PWD"
+gnome-terminal -e "bash -c \"python3 $PWD/global-detector/global-detector.py 1;exec bash\""
+gnome-terminal -e "bash -c \"python3 $PWD/detector/detector.py 1 1;exec bash\""
+gnome-terminal -e "bash -c \"python3 $PWD/detector/detector.py 2 1;exec bash\""
+gnome-terminal -e "bash -c \"python3 $PWD/detector/detector.py 3 1;exec bash\""
+gnome-terminal -e "bash -c \"python3 $PWD/server/server.py 1;exec bash\""
+gnome-terminal -e "bash -c \"python3 $PWD/server/server.py 2;exec bash\""
+gnome-terminal -e "bash -c \"python3 $PWD/server/server.py 3;exec bash\""
