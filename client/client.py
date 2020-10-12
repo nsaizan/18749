@@ -123,8 +123,13 @@ if __name__ == '__main__':
             try:
                 msg1 = messenger1.recv(s1)
                 if msg1:
-                    if request_num in to_be_receive:
-                        to_be_receive.remove(request_num)
+                    try:
+                        req_num = int(msg1.split(')')[0].split('#')[1])
+                    except (IndexError, ValueError) as e:
+                        logger.error('Bad message from client.')
+                        continue
+                    if req_num in to_be_receive:
+                        to_be_receive.remove(req_num)
                     else:
                         print("discard duplicated info.")
                 else:
@@ -137,8 +142,13 @@ if __name__ == '__main__':
             try:
                 msg2 = messenger2.recv(s2)
                 if msg2:
-                    if request_num in to_be_receive:
-                        to_be_receive.remove(request_num)
+                    try:
+                        req_num = int(msg2.split(')')[0].split('#')[1])
+                    except (IndexError, ValueError) as e:
+                        logger.error('Bad message from client.')
+                        continue
+                    if req_num in to_be_receive:
+                        to_be_receive.remove(req_num)
                     else:
                         print("discard duplicated info.")
                 else:
@@ -151,8 +161,13 @@ if __name__ == '__main__':
             try:
                 msg3 = messenger3.recv(s3)
                 if msg2:
-                    if request_num in to_be_receive:
-                        to_be_receive.remove(request_num)
+                    try:
+                        req_num = int(msg3.split(')')[0].split('#')[1])
+                    except (IndexError, ValueError) as e:
+                        logger.error('Bad message from client.')
+                        continue
+                    if req_num in to_be_receive:
+                        to_be_receive.remove(req_num)
                     else:
                         print("discard duplicated info.")
                 else:
