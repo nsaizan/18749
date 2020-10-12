@@ -126,12 +126,12 @@ if __name__ == '__main__':
                     try:
                         req_num = int(msg1.split(')')[0].split('#')[1])
                     except (IndexError, ValueError) as e:
-                        logger.error('Bad message from client.')
+                        logger.error('Bad message from server.')
                         continue
                     if req_num in to_be_receive:
                         to_be_receive.remove(req_num)
                     else:
-                        print("discard duplicated info.")
+                        logger.warning(" Discard duplicated info.")
                 else:
                     continue
             except Exception as e:
@@ -145,12 +145,12 @@ if __name__ == '__main__':
                     try:
                         req_num = int(msg2.split(')')[0].split('#')[1])
                     except (IndexError, ValueError) as e:
-                        logger.error('Bad message from client.')
+                        logger.error('Bad message from server.')
                         continue
                     if req_num in to_be_receive:
                         to_be_receive.remove(req_num)
                     else:
-                        print("discard duplicated info.")
+                        logger.warning(" Discard duplicated info.")
                 else:
                     continue
             except Exception as e:
@@ -164,12 +164,12 @@ if __name__ == '__main__':
                     try:
                         req_num = int(msg3.split(')')[0].split('#')[1])
                     except (IndexError, ValueError) as e:
-                        logger.error('Bad message from client.')
+                        logger.error('Bad message from server.')
                         continue
                     if req_num in to_be_receive:
                         to_be_receive.remove(req_num)
                     else:
-                        print("discard duplicated info.")
+                        logger.warning(" Discard duplicated info.")
                 else:
                     continue
             except Exception as e:
