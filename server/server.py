@@ -13,6 +13,7 @@ import sys
 import time
 import select
 import traceback
+import random
 sys.path.append("..")
 
 # Custom imports
@@ -72,6 +73,7 @@ def serve_clients():
                 logger.info(f"After Request: S={num_enemies}")
 
                 messenger.socket = conn
+                time.sleep(random.randint(1,3))
                 messenger.send(f"(Req#{req_num}){num_enemies} FORMICS REMAIN")
 
             clients_lock.release()

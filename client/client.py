@@ -27,6 +27,24 @@ from ports  import ports
 # # # # # # # # # # # # #
 to_be_receive = []
 
+
+def listen2server(s_alive, messenger, s):
+    if s_alive:
+        try:
+            msg = messenger.recv(s)
+            if msg:
+                try:
+                    req_num = int(msg.split(')')[0].split('#')[1])
+                except (IndexError, ValueError) as e:
+                    logger.error('Bad message from server.')
+                if req_num in to_be_receive:
+                    to_be_receive.remove(req_num)
+                else:
+                    logger.warning(" Discard duplicated info.")
+        except Exception as e:
+            s_alive = 0
+
+
 if __name__ == '__main__':
     # Flag to mark whether server is available
     s1_alive = 1
@@ -102,7 +120,7 @@ if __name__ == '__main__':
                 s3_alive = 0
 
         # Get user input
-        attack_value = input("What is your next attack? ")
+        attack_value = input("What is your next attack?\n")
 
         # Check if user requested to exit
         if (attack_value in ['exit', 'close', 'quit']):
@@ -139,60 +157,73 @@ if __name__ == '__main__':
             except Exception as e:
                 s3_alive = 0
 
+        t1 = threading.Thread(target=listen2server,
+                              args=(s1_alive, messenger1, s1),
+                              daemon=True)
+        t2 = threading.Thread(target=listen2server,
+                              args=(s2_alive, messenger2, s2),
+                              daemon=True)
+        t3 = threading.Thread(target=listen2server,
+                              args=(s3_alive, messenger3, s3),
+                              daemon=True)
+        t1.start()
+        t2.start()
+        t3.start()
+
         # when a server is alive, listen from it
-        if s1_alive:
-            try:
-                msg1 = messenger1.recv(s1)
-                if msg1:
-                    try:
-                        req_num = int(msg1.split(')')[0].split('#')[1])
-                    except (IndexError, ValueError) as e:
-                        logger.error('Bad message from server.')
-                        continue
-                    if req_num in to_be_receive:
-                        to_be_receive.remove(req_num)
-                    else:
-                        logger.warning(" Discard duplicated info.")
-                else:
-                    continue
-            except Exception as e:
-                s1_alive = 0
+        # if s1_alive:
+        #     try:
+        #         msg1 = messenger1.recv(s1)
+        #         if msg1:
+        #             try:
+        #                 req_num = int(msg1.split(')')[0].split('#')[1])
+        #             except (IndexError, ValueError) as e:
+        #                 logger.error('Bad message from server.')
+        #                 continue
+        #             if req_num in to_be_receive:
+        #                 to_be_receive.remove(req_num)
+        #             else:
+        #                 logger.warning(" Discard duplicated info.")
+        #         else:
+        #             continue
+        #     except Exception as e:
+        #         s1_alive = 0
 
-        if s2_alive:
-            try:
-                msg2 = messenger2.recv(s2)
-                if msg2:
-                    try:
-                        req_num = int(msg2.split(')')[0].split('#')[1])
-                    except (IndexError, ValueError) as e:
-                        logger.error('Bad message from server.')
-                        continue
-                    if req_num in to_be_receive:
-                        to_be_receive.remove(req_num)
-                    else:
-                        logger.warning(" Discard duplicated info.")
-                else:
-                    continue
-            except Exception as e:
-                s2_alive = 0
+        # if s2_alive:
+        #     try:
+        #         msg2 = messenger2.recv(s2)
+        #         if msg2:
+        #             try:
+        #                 req_num = int(msg2.split(')')[0].split('#')[1])
+        #             except (IndexError, ValueError) as e:
+        #                 logger.error('Bad message from server.')
+        #                 continue
+        #             if req_num in to_be_receive:
+        #                 to_be_receive.remove(req_num)
+        #             else:
+        #                 logger.warning(" Discard duplicated info.")
+        #         else:
+        #             continue
+        #     except Exception as e:
+        #         s2_alive = 0
 
-        if s3_alive:
-            try:
-                msg3 = messenger3.recv(s3)
-                if msg3:
-                    try:
-                        req_num = int(msg3.split(')')[0].split('#')[1])
-                    except (IndexError, ValueError) as e:
-                        logger.error('Bad message from server.')
-                        continue
-                    if req_num in to_be_receive:
-                        to_be_receive.remove(req_num)
-                    else:
-                        logger.warning(" Discard duplicated info.")
-                else:
-                    continue
-            except Exception as e:
-                s3_alive = 0
+        # if s3_alive:
+        #     try:
+        #         msg3 = messenger3.recv(s3)
+        #         if msg3:
+        #             try:
+        #                 req_num = int(msg3.split(')')[0].split('#')[1])
+        #             except (IndexError, ValueError) as e:
+        #                 logger.error('Bad message from server.')
+        #                 continue
+        #             if req_num in to_be_receive:
+        #                 to_be_receive.remove(req_num)
+        #             else:
+        #                 logger.warning(" Discard duplicated info.")
+        #         else:
+        #             continue
+        #     except Exception as e:
+        #         s3_alive = 0
 
     if s1_alive:
         s1.close()
