@@ -27,7 +27,6 @@ from ports  import ports
 # # # # # # # # # # # # #
 to_be_receive = []
 
-
 if __name__ == '__main__':
     # Flag to mark whether server is available
     s1_alive = 1
@@ -180,7 +179,7 @@ if __name__ == '__main__':
         if s3_alive:
             try:
                 msg3 = messenger3.recv(s3)
-                if msg2:
+                if msg3:
                     try:
                         req_num = int(msg3.split(')')[0].split('#')[1])
                     except (IndexError, ValueError) as e:
