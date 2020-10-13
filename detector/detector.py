@@ -10,6 +10,7 @@ import socket
 import threading
 import time
 import sys
+import traceback
 sys.path.append("..")
 
 # Custom imports
@@ -84,6 +85,9 @@ def get_receipts(frequency, hb_conn):
 
         except Exception as e:
             lfd_logger.warning("Error while getting receipt! (Connection may have closed.)")
+            gfd_messenger.send(f"{MY_NAME}: delete replica {MY_SERVER}")
+            hb_conn.close()
+            traceback.print_exc()
             return
  
 # Tries to connect to the heartbeat socket until it succeeds, then
