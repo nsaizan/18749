@@ -102,7 +102,6 @@ if __name__ == '__main__':
             except Exception as e:
                 s3_alive = 0
 
-
         # Get user input
         attack_value = input("What is your next attack? ")
 
@@ -130,24 +129,18 @@ if __name__ == '__main__':
                 messenger1.send(f"(Req#{request_num}) {attack_value}")
             except Exception as e:
                 s1_alive = 0
-                pass
         if s2_alive:
             try:
                 messenger2.send(f"(Req#{request_num}) {attack_value}")
             except Exception as e:
                 s2_alive = 0
-                pass
         if s3_alive:
             try:
                 messenger3.send(f"(Req#{request_num}) {attack_value}")
             except Exception as e:
                 s3_alive = 0
-                pass
 
-        # Wait to receive a reply (will be logged automatically)
-        # while (not (messenger.recv(s))):
-        # pass
-
+        # when a server is alive, listen from it
         if s1_alive:
             try:
                 msg1 = messenger1.recv(s1)
@@ -165,7 +158,6 @@ if __name__ == '__main__':
                     continue
             except Exception as e:
                 s1_alive = 0
-                pass
 
         if s2_alive:
             try:
@@ -184,7 +176,6 @@ if __name__ == '__main__':
                     continue
             except Exception as e:
                 s2_alive = 0
-                pass
 
         if s3_alive:
             try:
@@ -203,7 +194,6 @@ if __name__ == '__main__':
                     continue
             except Exception as e:
                 s3_alive = 0
-                pass
 
     if s1_alive:
         s1.close()
