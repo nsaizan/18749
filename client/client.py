@@ -74,6 +74,35 @@ if __name__ == '__main__':
 
     # Run until client closes the connection
     while (True):
+        # when server back again, reconnect
+        if s1_alive == 0:
+            try:
+                s1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s1.connect((HOST, ports[f"S1_LISTEN"]))
+                messenger1 = Messenger(s1, f'C{client_num}', 'S1', logger)
+                s1_alive = 1
+            except Exception as e:
+                s1_alive = 0
+
+        if s2_alive == 0:
+            try:
+                s2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s2.connect((HOST, ports[f"S2_LISTEN"]))
+                messenger2 = Messenger(s2, f'C{client_num}', 'S2', logger)
+                s2_alive = 1
+            except Exception as e:
+                s2_alive = 0
+
+        if s3_alive == 0:
+            try:
+                s3 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s3.connect((HOST, ports[f"S3_LISTEN"]))
+                messenger3 = Messenger(s3, f'C{client_num}', 'S3', logger)
+                s3_alive = 1
+            except Exception as e:
+                s3_alive = 0
+
+
         # Get user input
         attack_value = input("What is your next attack? ")
 
