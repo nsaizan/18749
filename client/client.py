@@ -82,12 +82,12 @@ if __name__ == '__main__':
 
     # Setup logger
     logger = Logger()
-    if s1_alive:
-        messenger1 = Messenger(s1, f'C{client_num}', 'S1', logger)
-    if s2_alive:
-        messenger2 = Messenger(s2, f'C{client_num}', 'S2', logger)
-    if s3_alive:
-        messenger3 = Messenger(s3, f'C{client_num}', 'S3', logger)
+    # if s1_alive:
+    messenger1 = Messenger(s1, f'C{client_num}', 'S1', logger)
+    # if s2_alive:
+    messenger2 = Messenger(s2, f'C{client_num}', 'S2', logger)
+    # if s3_alive:
+    messenger3 = Messenger(s3, f'C{client_num}', 'S3', logger)
 
     # Run until client closes the connection
     while (True):
