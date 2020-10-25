@@ -83,7 +83,7 @@ def get_receipts(frequency, hb_conn):
                     gfd_messenger.send(f"{MY_NAME}: add replica {MY_SERVER}")
                     server_is_initialized = True
 
-        except Exception as e:
+        except Exception:
             lfd_logger.warning("Error while getting receipt! (Connection may have closed.)")
             gfd_messenger.send(f"{MY_NAME}: delete replica {MY_SERVER}")
             hb_conn.close()
@@ -102,7 +102,7 @@ def send_heartbeat(frequency, hb_conn):
             hb_messenger.send(f"Heartbeat {hb_sent_num}")
             time.sleep(1/frequency)
 
-    except Exception as e:
+    except Exception:
         lfd_logger.warning("Error while sending heartbeat! (Connection may have closed.)")
         return
 
