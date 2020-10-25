@@ -26,7 +26,11 @@ from ports  import ports
 # # GLOBAL VARIABLES  # #
 # # # # # # # # # # # # #
 to_be_receive = []
+request_num = 0
 
+s1, s2, s3 = None, None, None
+s1_alive, s2_alive, s3_alive = False, False, False
+s1_messenger, s2_messenger, s3_messenger = None, None, None
 
 def listen2server(s_alive, messenger, s):
     if s_alive:
@@ -35,15 +39,120 @@ def listen2server(s_alive, messenger, s):
             if msg:
                 try:
                     req_num = int(msg.split(')')[0].split('#')[1])
-                except (IndexError, ValueError) as e:
+                except (IndexError, ValueError):
                     logger.error('Bad message from server.')
                 if req_num in to_be_receive:
                     to_be_receive.remove(req_num)
                 else:
                     logger.warning(" Discard duplicated info.")
-        except Exception as e:
+        except Exception:
             s_alive = 0
 
+def repair_connection(port_name, destination, client_num):
+    new_server = None
+    new_status = False
+    new_messenger = None
+    try:
+        new_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        new_server.connect((HOST, ports[port_name]))
+        new_messenger = Messenger(new_server, f'C{client_num}', destination, logger)
+        new_status = 1
+    except Exception:
+        new_status = 0
+
+    return new_server, new_status, new_messenger
+
+def repair_connections(servers, statuses, messengers):
+    global client_num
+
+    if statuses[0] == 0:
+        new_connection = repair_connection(f"S1_LISTEN", "S1", client_num)
+        servers[0], statuses[0], messengers[0] = new_connection
+
+    if statuses[1] == 0:
+        new_connection = repair_connection(f"S2_LISTEN", "S2", client_num)
+        servers[1], statuses[1], messengers[1] = new_connection
+
+    if statuses[2] == 0:
+        new_connection = repair_connection(f"S3_LISTEN", "S3", client_num)
+        servers[2], statuses[2], messengers[2] = new_connection
+
+    return servers, statuses, messengers
+
+def main():
+    # Run until client closes the connection
+    while (True):
+        global s1, s2, s3
+        global s1_alive, s2_alive, s3_alive
+        global s1_messenger, s2_messenger, s3_messenger
+        global client_num
+        global request_num
+    
+        # Bundle all server variables
+        server_list = [s1, s2, s3]
+        server_status_list = [s1_alive, s2_alive, s3_alive]
+        server_messenger_list = [s1_messenger, s2_messenger, s3_messenger]
+
+        # Repair the server connections
+        vals = repair_connections(server_list, server_status_list, server_messenger_list)
+        server_list, server_status_list, server_status_list = vals
+
+        # Update server variables
+        s1, s2, s3 = server_list
+        s1_alive, s2_alive, s3_alive = server_status_list
+        s1_messenger, s2_messenger, s3_messenger = server_messenger_list
+
+        # Get user input
+        attack_value = input("What is your next attack?\n")
+
+        # Check if user requested to exit
+        if (attack_value in ['exit', 'close', 'quit']):
+            print("INFO: Closing connection")
+            if s1_alive:
+                s1.close()
+            if s2_alive:
+                s2.close()
+            if s3_alive:
+                s3.close()
+            break
+
+        # Check user input format
+        if (attack_value.isdecimal() == False):
+            print("ERROR: Input must be a valid integer")
+            continue
+
+        # Send the attack to the server
+        request_num = request_num + 1
+        to_be_receive.append(request_num)
+        if s1_alive:
+            try:
+                s1_messenger.send(f"(Req#{request_num}) {attack_value}")
+            except Exception:
+                s1_alive = 0
+        if s2_alive:
+            try:
+                s2_messenger.send(f"(Req#{request_num}) {attack_value}")
+            except Exception:
+                s2_alive = 0
+        if s3_alive:
+            try:
+                s3_messenger.send(f"(Req#{request_num}) {attack_value}")
+            except Exception:
+                s3_alive = 0
+
+        # Process the servers responses
+        t1 = threading.Thread(target=listen2server,
+                              args=(s1_alive, s1_messenger, s1),
+                              daemon=True)
+        t2 = threading.Thread(target=listen2server,
+                              args=(s2_alive, s2_messenger, s2),
+                              daemon=True)
+        t3 = threading.Thread(target=listen2server,
+                              args=(s3_alive, s3_messenger, s3),
+                              daemon=True)
+        t1.start()
+        t2.start()
+        t3.start()
 
 if __name__ == '__main__':
     # Flag to mark whether server is available
@@ -59,7 +168,6 @@ if __name__ == '__main__':
         raise ValueError("Too Many CLI Arguments!")
 
     client_num = int(sys.argv[1])
-    request_num = 0
 
     # Open the connection to the server.
     s1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -82,148 +190,12 @@ if __name__ == '__main__':
 
     # Setup logger
     logger = Logger()
-    # if s1_alive:
-    messenger1 = Messenger(s1, f'C{client_num}', 'S1', logger)
-    # if s2_alive:
-    messenger2 = Messenger(s2, f'C{client_num}', 'S2', logger)
-    # if s3_alive:
-    messenger3 = Messenger(s3, f'C{client_num}', 'S3', logger)
+    s1_messenger = Messenger(s1, f'C{client_num}', 'S1', logger)
+    s2_messenger = Messenger(s2, f'C{client_num}', 'S2', logger)
+    s3_messenger = Messenger(s3, f'C{client_num}', 'S3', logger)
 
-    # Run until client closes the connection
-    while (True):
-        # when server back again, reconnect
-        if s1_alive == 0:
-            try:
-                s1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s1.connect((HOST, ports[f"S1_LISTEN"]))
-                messenger1 = Messenger(s1, f'C{client_num}', 'S1', logger)
-                s1_alive = 1
-            except Exception as e:
-                s1_alive = 0
-
-        if s2_alive == 0:
-            try:
-                s2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s2.connect((HOST, ports[f"S2_LISTEN"]))
-                messenger2 = Messenger(s2, f'C{client_num}', 'S2', logger)
-                s2_alive = 1
-            except Exception as e:
-                s2_alive = 0
-
-        if s3_alive == 0:
-            try:
-                s3 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s3.connect((HOST, ports[f"S3_LISTEN"]))
-                messenger3 = Messenger(s3, f'C{client_num}', 'S3', logger)
-                s3_alive = 1
-            except Exception as e:
-                s3_alive = 0
-
-        # Get user input
-        attack_value = input("What is your next attack?\n")
-
-        # Check if user requested to exit
-        if (attack_value in ['exit', 'close', 'quit']):
-            print("INFO: Closing connection")
-            if s1_alive:
-                s1.close()
-            if s2_alive:
-                s2.close()
-            if s3_alive:
-                s3.close()
-            break
-
-        # Check user input format
-        if (attack_value.isdecimal() == False):
-            print("ERROR: Input must be a valid integer")
-            continue
-
-        # Send and log the attack
-        request_num = request_num + 1
-        to_be_receive.append(request_num)
-        if s1_alive:
-            try:
-                messenger1.send(f"(Req#{request_num}) {attack_value}")
-            except Exception as e:
-                s1_alive = 0
-        if s2_alive:
-            try:
-                messenger2.send(f"(Req#{request_num}) {attack_value}")
-            except Exception as e:
-                s2_alive = 0
-        if s3_alive:
-            try:
-                messenger3.send(f"(Req#{request_num}) {attack_value}")
-            except Exception as e:
-                s3_alive = 0
-
-        t1 = threading.Thread(target=listen2server,
-                              args=(s1_alive, messenger1, s1),
-                              daemon=True)
-        t2 = threading.Thread(target=listen2server,
-                              args=(s2_alive, messenger2, s2),
-                              daemon=True)
-        t3 = threading.Thread(target=listen2server,
-                              args=(s3_alive, messenger3, s3),
-                              daemon=True)
-        t1.start()
-        t2.start()
-        t3.start()
-
-        # when a server is alive, listen from it
-        # if s1_alive:
-        #     try:
-        #         msg1 = messenger1.recv(s1)
-        #         if msg1:
-        #             try:
-        #                 req_num = int(msg1.split(')')[0].split('#')[1])
-        #             except (IndexError, ValueError) as e:
-        #                 logger.error('Bad message from server.')
-        #                 continue
-        #             if req_num in to_be_receive:
-        #                 to_be_receive.remove(req_num)
-        #             else:
-        #                 logger.warning(" Discard duplicated info.")
-        #         else:
-        #             continue
-        #     except Exception as e:
-        #         s1_alive = 0
-
-        # if s2_alive:
-        #     try:
-        #         msg2 = messenger2.recv(s2)
-        #         if msg2:
-        #             try:
-        #                 req_num = int(msg2.split(')')[0].split('#')[1])
-        #             except (IndexError, ValueError) as e:
-        #                 logger.error('Bad message from server.')
-        #                 continue
-        #             if req_num in to_be_receive:
-        #                 to_be_receive.remove(req_num)
-        #             else:
-        #                 logger.warning(" Discard duplicated info.")
-        #         else:
-        #             continue
-        #     except Exception as e:
-        #         s2_alive = 0
-
-        # if s3_alive:
-        #     try:
-        #         msg3 = messenger3.recv(s3)
-        #         if msg3:
-        #             try:
-        #                 req_num = int(msg3.split(')')[0].split('#')[1])
-        #             except (IndexError, ValueError) as e:
-        #                 logger.error('Bad message from server.')
-        #                 continue
-        #             if req_num in to_be_receive:
-        #                 to_be_receive.remove(req_num)
-        #             else:
-        #                 logger.warning(" Discard duplicated info.")
-        #         else:
-        #             continue
-        #     except Exception as e:
-        #         s3_alive = 0
+    # Main Loop
+    main()
 
     if s1_alive:
         s1.close()
