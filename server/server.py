@@ -77,7 +77,7 @@ def parse_checkpoint_message(logger, msg):
                 cp_num = int(msg.split(')')[0].split('#')[1])
                 ret_val = True
             except (IndexError, ValueError):
-                logger.error('Bad message from client.')
+                logger.error('Bad checkpoint message!')
 
     return state, cp_num, ret_val
 
@@ -156,12 +156,14 @@ def send_checkpoint(logger, num_enemies):
             backup2_alive = False
 
     cp_num += 1
+    logger.info(f"Incrementing checkpoint count to {cp_num}")
 
 # Function to serve a single client.
 def serve_clients_and_replicas():
     # Ensure that we are referencing the global num_enemies
     global num_enemies
     global clients_lock
+    global cp_num
 
     logger = Logger()
     messenger = Messenger(None, '', '', logger)
@@ -183,7 +185,7 @@ def serve_clients_and_replicas():
                 msg = messenger.recv(conn)
 
                 # Parse checkpoints
-                state, cp_num, is_cp = parse_checkpoint_message(logger, msg)
+                state, cp_num_new, is_cp = parse_checkpoint_message(logger, msg)
 
                 # Parse client messages
                 attack, req_num, is_client_msg = parse_client_message(logger, msg)
@@ -193,6 +195,8 @@ def serve_clients_and_replicas():
                     # Process the checkpoint
                     logger.info(f"Updating internal state to: {state}")
                     num_enemies = state
+                    logger.info(f"Updating checkpoint count to: {cp_num_new}")
+                    cp_num = cp_num_new
 
                 # Process client messages
                 if is_client_msg and we_are_primary():

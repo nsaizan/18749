@@ -2,7 +2,7 @@
 #    File: Client Application
 #  Author: aquinn, nsaizan, ranz2
 #   Group: TheEnemy'sGateIsDown
-#    Date: 9/14/2020
+#    Date: 10/26/2020
 #
 # Main code for our client.
 
@@ -131,12 +131,16 @@ def main():
                 s1_alive = 0
         if s2_alive:
             try:
-                s2_messenger.send(f"(Req#{request_num}) {attack_value}")
+                #IN PASSIVE REPLICATION, DO NOT SEND TO S2
+                pass
+                #s2_messenger.send(f"(Req#{request_num}) {attack_value}")
             except Exception:
                 s2_alive = 0
         if s3_alive:
             try:
-                s3_messenger.send(f"(Req#{request_num}) {attack_value}")
+                #IN PASSIVE REPLICATION, DO NOT SEND TO S3
+                pass
+                #s3_messenger.send(f"(Req#{request_num}) {attack_value}")
             except Exception:
                 s3_alive = 0
 
@@ -144,15 +148,22 @@ def main():
         t1 = threading.Thread(target=listen2server,
                               args=(s1_alive, s1_messenger, s1),
                               daemon=True)
-        t2 = threading.Thread(target=listen2server,
-                              args=(s2_alive, s2_messenger, s2),
-                              daemon=True)
-        t3 = threading.Thread(target=listen2server,
-                              args=(s3_alive, s3_messenger, s3),
-                              daemon=True)
+        #IN PASSIVE REPLICATION, DO NOT SEND TO S2 OR S3
+        #t2 = threading.Thread(target=listen2server,
+        #                      args=(s2_alive, s2_messenger, s2),
+        #                      daemon=True)
+        #t3 = threading.Thread(target=listen2server,
+        #                      args=(s3_alive, s3_messenger, s3),
+        #                      daemon=True)
         t1.start()
-        t2.start()
-        t3.start()
+
+        #Wait for a little bit to get the response before prompting the user
+        #again.
+        time.sleep(0.010)
+
+        #IN PASSIVE REPLICATION, DO NOT SEND TO S2 OR S3
+        #t2.start()
+        #t3.start()
 
 if __name__ == '__main__':
     # Flag to mark whether server is available
