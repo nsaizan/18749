@@ -16,6 +16,7 @@ sys.path.append("..")
 from helper import Logger
 from helper import Messenger
 from ports  import HOST
+from ports  import ACTIVE_REPLICATION
 from ports  import ports
 
 # # # # # # # # # # # # #
@@ -95,7 +96,7 @@ def main():
 
         # Repair the server connections
         vals = repair_connections(server_list, server_status_list, server_messenger_list)
-        server_list, server_status_list, server_status_list = vals
+        server_list, server_status_list, server_messenger_list = vals
 
         # Update server variables
         s1, s2, s3 = server_list
@@ -132,15 +133,15 @@ def main():
         if s2_alive:
             try:
                 #IN PASSIVE REPLICATION, DO NOT SEND TO S2
-                pass
-                #s2_messenger.send(f"(Req#{request_num}) {attack_value}")
+                if ACTIVE_REPLICATION:
+                    s2_messenger.send(f"(Req#{request_num}) {attack_value}")
             except Exception:
                 s2_alive = 0
         if s3_alive:
             try:
                 #IN PASSIVE REPLICATION, DO NOT SEND TO S3
-                pass
-                #s3_messenger.send(f"(Req#{request_num}) {attack_value}")
+                if ACTIVE_REPLICATION:
+                    s3_messenger.send(f"(Req#{request_num}) {attack_value}")
             except Exception:
                 s3_alive = 0
 
@@ -149,21 +150,25 @@ def main():
                               args=(s1_alive, s1_messenger, s1),
                               daemon=True)
         #IN PASSIVE REPLICATION, DO NOT SEND TO S2 OR S3
-        #t2 = threading.Thread(target=listen2server,
-        #                      args=(s2_alive, s2_messenger, s2),
-        #                      daemon=True)
-        #t3 = threading.Thread(target=listen2server,
-        #                      args=(s3_alive, s3_messenger, s3),
-        #                      daemon=True)
+        if ACTIVE_REPLICATION:
+            t2 = threading.Thread(target=listen2server,
+                                  args=(s2_alive, s2_messenger, s2),
+                                  daemon=True)
+            t3 = threading.Thread(target=listen2server,
+                                  args=(s3_alive, s3_messenger, s3),
+                                  daemon=True)
         t1.start()
 
+        #IN PASSIVE REPLICATION, DO NOT SEND TO S2 OR S3
+        if ACTIVE_REPLICATION:
+            t2.start()
+            t3.start()
+        
         #Wait for a little bit to get the response before prompting the user
         #again.
         time.sleep(0.010)
 
-        #IN PASSIVE REPLICATION, DO NOT SEND TO S2 OR S3
-        #t2.start()
-        #t3.start()
+        
 
 if __name__ == '__main__':
     # Flag to mark whether server is available

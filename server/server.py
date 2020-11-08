@@ -22,8 +22,11 @@ from helper import Logger
 from helper import Messenger
 from ports  import ports
 from ports  import HOST
+from ports  import ACTIVE_REPLICATION
 
 MY_NAME = "" # Determined at runtime.
+BACKUP1_NAME = ""
+BACKUP2_NAME = ""
 
 MAX_MSG_LEN = 1024 # Max number of bytes we're willing to receive at once.
 
@@ -97,11 +100,11 @@ def repair_connection(logger, port_name, destination):
 
 def repair_connections(logger, backups, statuses, messengers):
     if statuses[0] == False:
-        new_connection = repair_connection(logger, f"S2_LISTEN", "S2")
+        new_connection = repair_connection(logger, f"{BACKUP1_NAME}_LISTEN", BACKUP1_NAME)
         backups[0], statuses[0], messengers[0] = new_connection
 
     if statuses[1] == False:
-        new_connection = repair_connection(logger, f"S3_LISTEN", "S3")
+        new_connection = repair_connection(logger, f"{BACKUP2_NAME}_LISTEN", BACKUP2_NAME)
         backups[1], statuses[1], messengers[1] = new_connection
 
     return backups, statuses, messengers
@@ -168,6 +171,9 @@ def serve_clients_and_replicas():
     logger = Logger()
     messenger = Messenger(None, '', '', logger)
 
+    #TODO: Only be ready at the first launch, or after you've received the first checkpoint.
+    we_are_ready = True;
+
     try: 
         while(1):
 
@@ -199,7 +205,7 @@ def serve_clients_and_replicas():
                     cp_num = cp_num_new
 
                 # Process client messages
-                if is_client_msg and we_are_primary():
+                if is_client_msg and (we_are_primary() or (ACTIVE_REPLICATION and we_are_ready)):
                     # Process the attack
                     logger.info(f"Before Request: S={num_enemies}")
                     num_enemies = num_enemies - attack
@@ -210,7 +216,9 @@ def serve_clients_and_replicas():
                     messenger.send(f"(Req#{req_num}){num_enemies} FORMICS REMAIN")
 
             # Send a checkpoint to backups
-            if its_time_to_send_cp():
+            # NOTE THAT this is outside the above for loop, so we are in a
+            # quiescent state before sending the checkpoint. 
+            if not ACTIVE_REPLICATION and its_time_to_send_cp():
                 send_checkpoint(logger, num_enemies)
 
             clients_lock.release()
@@ -224,9 +232,8 @@ def serve_clients_and_replicas():
 
 # Function to receive heartbeats and reply to them.
 def serve_LFD(hb_conn, addr):
-    #with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as r_socket:
 
-    messenger = Messenger(hb_conn, 'S1', '')
+    messenger = Messenger(hb_conn, MY_NAME, '')
                 
     try:
         while(1):
@@ -277,10 +284,8 @@ def main():
         except Exception:
             # Gracefully exit by closing s & all connections.
             traceback.print_exc()
-            s.shutdown()
             s.close()
             for conn in clients:
-                conn.shutdown()
                 conn.close()
             return
 
@@ -298,7 +303,12 @@ if __name__ == '__main__':
 
     replica_num = int(sys.argv[1])
 
+    server_numbers = [1,2,3]
     MY_NAME = "S" + str(replica_num)
+
+    server_numbers.remove(replica_num)
+    BACKUP1_NAME = "S" + str(min(server_numbers))
+    BACKUP2_NAME = "S" + str(max(server_numbers))
 
     # Global variable num_enemies holds the number of enemies remaining.
     # This starts at 1000 and can be decremented by clients.

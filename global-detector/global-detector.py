@@ -1,5 +1,5 @@
 #
-#    File: Local Fault Detector
+#    File: Global Fault Detector
 #  Author: aquinn, nsaizan, ranz2
 #   Group: TheEnemy'sGateIsDown
 #    Date: 10/9/2020
@@ -73,7 +73,7 @@ def delete_member(server):
 
 # Continuously wait to receive receipts on a specified connection.
 # If no receipt is received before the timeout, throw an error and exit.
-def get_receipts(frequency, hb_conn, messenger):
+def get_receipts(frequency, hb_conn, messenger, rm_messenger):
 
     hb_messenger = messenger
     
@@ -101,12 +101,16 @@ def get_receipts(frequency, hb_conn, messenger):
                     requestor = args[0][0:4]
                     server_to_add = args[3]
                     add_member(server_to_add)
+                    #Pass along to the RM
+                    rm_messenger.send(x)
                 # Check if this is a delete membership request
                 elif("delete" in x):
                     args = x.split(" ")
                     requestor = args[0][0:4]
                     server_to_delete = args[3]
                     delete_member(server_to_delete)
+                    #Pass along to the RM
+                    rm_messenger.send(x)
 
         except Exception as e:
             gfd_logger.warning("Error while getting receipt! (Connection may have closed.)")
@@ -131,6 +135,20 @@ def heartbeat_one_lfd(frequency, hb_conn, messenger):
 
 
 def main(freq):
+    #Once in the beginning we connect to the RM. The RM is a single point of
+    #failure, so we don't anticipate ever having to re-connect to it.
+    rm_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    while(rm_socket.connect_ex((HOST, ports["RM_LISTEN"]))):
+        gfd_logger.warning("RM not available.")
+        time.sleep(1)
+
+    gfd_logger.info('Registered with the RM.')
+    rm_messenger = Messenger(rm_socket, "GFD", "RM", gfd_logger)
+
+    # Identify ourself to the RM
+    rm_messenger.send("GFD")
+    
     # Open the top-level listening socket.
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 
@@ -164,7 +182,7 @@ def main(freq):
                 heartbeat = threading.Thread(target=heartbeat_one_lfd, args = (freq, conn, hb_messenger))
                 heartbeat.start()
                 
-                receipts = threading.Thread(target=get_receipts, args=(freq, conn, hb_messenger))
+                receipts = threading.Thread(target=get_receipts, args=(freq, conn, hb_messenger, rm_messenger))
                 receipts.start()
 
                 
@@ -174,10 +192,8 @@ def main(freq):
                 
         except Exception as e: 
             traceback.print_exc()
-            s.shutdown()
             s.close() #Gracefully exit by closing s & all connections.
             for conn in clients:
-                conn.shutdown()
                 conn.close()
             return
 

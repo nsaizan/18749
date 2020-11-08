@@ -1,4 +1,5 @@
 
+ACTIVE_REPLICATION = False
 
 HOST = '127.0.0.1'
 
@@ -9,5 +10,6 @@ ports = {
     "S1_HB"     : 36331,
     "S2_HB"     : 36341,
     "S3_HB"     : 36351,
-    "GFD_LISTEN": 36300}
+    "GFD_LISTEN": 36300,
+    "RM_LISTEN" : 36400}
     
