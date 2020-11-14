@@ -34,19 +34,23 @@ SERVE_CLIENT_PERIOD = 0.01 # seconds
 
 SEND_CP_PERIOD = 5 # seconds
 
+cp_num = 0 # Checkpoint number
+last_cp_time = None # Last time we sent a checkpoint
+
 backup1, backup2 = None, None
 backup1_alive, backup2_alive = False, False
 backup1_messenger, backup2_messenger = None, None
 
-cp_num = 0 # Checkpoint number
-last_cp_time = None # Last time we sent a checkpoint
+# Active Replication Quiescense Flag
+WE_ARE_READY = False
+
+# Passive Replication Primary Flag
+WE_ARE_PRIMARY = False
+
 
 # # # # # # # # # # # # #
 # THREAD FUNCTION DEFNS #
 # # # # # # # # # # # # #
-
-def we_are_primary():
-    return replica_num == 1
 
 def wait_for_clients():
     while(not clients):
@@ -83,6 +87,33 @@ def parse_checkpoint_message(logger, msg):
                 logger.error('Bad checkpoint message!')
 
     return state, cp_num, ret_val
+
+def parse_primary_assignment_message(logger, msg):
+    ret_val = False
+    
+    if msg:
+        if "Primary" in msg:
+            ret_val = True
+
+    return ret_val
+
+def parse_send_checkpoint_message(logger, msg):
+    ret_val = False
+
+    if msg:
+        if "Send Checkpoint" in msg:
+            ret_val = True
+
+    return ret_val
+
+def parse_set_ready_message(logger, msg):
+    ret_val = False
+
+    if msg:
+        if "Ready" in msg:
+            ret_val
+
+    return ret_val
 
 def repair_connection(logger, port_name, destination):
     new_server = None
@@ -132,7 +163,7 @@ def send_checkpoint(logger, num_enemies):
     global cp_num
 
     # Ensure we are the primary replica
-    if not we_are_primary():
+    if not WE_ARE_PRIMARY:
         return
 
     # Repair connections if needed
@@ -171,9 +202,6 @@ def serve_clients_and_replicas():
     logger = Logger()
     messenger = Messenger(None, '', '', logger)
 
-    #TODO: Only be ready at the first launch, or after you've received the first checkpoint.
-    we_are_ready = True;
-
     try: 
         while(1):
 
@@ -196,6 +224,15 @@ def serve_clients_and_replicas():
                 # Parse client messages
                 attack, req_num, is_client_msg = parse_client_message(logger, msg)
 
+                # Parse primary assignment messages
+                is_primary_assignment_msg = parse_primary_assignment_message(logger, msg)
+
+                # Parse send checkpoint messages
+                is_send_cp_msg = parse_send_checkpoint_message(logger, msg)
+
+                # Parse set ready messages
+                is_set_ready_msg = parse_set_ready_message(logger, msg)
+
                 # Process checkpoints
                 if is_cp:
                     # Process the checkpoint
@@ -203,9 +240,10 @@ def serve_clients_and_replicas():
                     num_enemies = state
                     logger.info(f"Updating checkpoint count to: {cp_num_new}")
                     cp_num = cp_num_new
+                    WE_ARE_READY = True
 
                 # Process client messages
-                if is_client_msg and (we_are_primary() or (ACTIVE_REPLICATION and we_are_ready)):
+                if is_client_msg and (WE_ARE_PRIMARY or (ACTIVE_REPLICATION and WE_ARE_READY)):
                     # Process the attack
                     logger.info(f"Before Request: S={num_enemies}")
                     num_enemies = num_enemies - attack
@@ -215,11 +253,28 @@ def serve_clients_and_replicas():
                     messenger.socket = conn
                     messenger.send(f"(Req#{req_num}){num_enemies} FORMICS REMAIN")
 
+                # Process primary assignment messages
+                if is_primary_assignment_msg:
+                    logger.info(f"Updating Replica Status to Primary")
+                    WE_ARE_PRIMARY = True
+
+                # Process send checkpoint messages
+                if is_send_cp_msg:
+                    logger.info(f"Force Sending Checkpoint")
+                    force_send_cp = True
+
+                # Process set ready messages
+                if is_set_ready_msg:
+                    logger.info(f"Setting Ready Flag to True")
+                    WE_ARE_READY = True
+
             # Send a checkpoint to backups
             # NOTE THAT this is outside the above for loop, so we are in a
             # quiescent state before sending the checkpoint. 
-            if not ACTIVE_REPLICATION and its_time_to_send_cp():
+            if (not ACTIVE_REPLICATION and its_time_to_send_cp()) or force_send_cp:
                 send_checkpoint(logger, num_enemies)
+                
+                force_send_cp = False
 
             clients_lock.release()
 
