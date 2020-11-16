@@ -199,6 +199,8 @@ def serve_clients_and_replicas():
     global clients_lock
     global cp_num
 
+    force_send_cp = False
+
     logger = Logger()
     messenger = Messenger(None, '', '', logger)
 
