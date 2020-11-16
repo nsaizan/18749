@@ -17,6 +17,8 @@ from helper import Logger
 from helper import Messenger
 from ports import ports
 from ports import HOST
+import threading
+from ports  import ACTIVE_REPLICATION
 
 
 MAX_MSG_LEN = 1024 #Max number of bytes we're willing to receive at once.
@@ -29,6 +31,16 @@ members_lock = threading.Lock()
 
 rm_logger = Logger()
 
+def send2servers(servers_list, msg):
+    logger = Logger()
+    for s_num in servers_list:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((HOST, ports[f"{s_num}_LISTEN"]))
+        new_messenger = Messenger(s, f'RM', f"{s_num}", logger)
+        new_messenger.send(msg)
+        logger.info(f"{s_num}, " + msg)
+        s.close()
+
 def add_member(server):
     global member_count
     global membership
@@ -40,10 +52,33 @@ def add_member(server):
         rm_logger.warning(f"Server {server} is already a member")
     else:
         membership.append(server)
-        membership.sort()
+        # membership.sort()
         member_count += 1
         membership_string = ", ".join(membership)
         rm_logger.info(f"RM: {member_count} members: {membership_string}")
+
+        # # # # # # # # # # # BEGIN OF RM TO SEVER # # # # # # # # # # #
+        # RM should tell server what to do when membership changed
+        msg2server = ""
+        if ACTIVE_REPLICATION:
+            if member_count == 1:
+                msg2server = "You Must Set I Am Ready To True"
+                server_list = [membership[0]]
+            else:
+                # the new joined replica should not send check point
+                msg2server = "You Must Send Checkpoint"
+                server_list = membership[:-1]
+        else:
+            if member_count == 1:
+                msg2server = "You Are The Primary"
+                server_list = [membership[0]]
+
+        if msg2server != "":
+            t = threading.Thread(target=send2servers,
+                                  args=(server_list, msg2server),
+                                  daemon=True)
+            t.start()
+        # # # # # # # # # # #  END OF RM TO SEVER  # # # # # # # # # # #
 
     members_lock.release()
 
@@ -55,6 +90,23 @@ def delete_member(server):
     members_lock.acquire()
 
     if server in membership:
+        # # # # # # # # # # # BEGIN OF RM TO SEVER # # # # # # # # # # #
+        # RM should tell server what to do when membership changed
+        msg2server = ""
+        if not ACTIVE_REPLICATION:
+            # if delete the earliest joined replica in passive mode
+            # it delete the primary, then need to choose another primary
+            if server == membership[0] and member_count > 1:
+                msg2server = "You Are The Primary"
+                server_list = [membership[1]]
+
+        if msg2server != "":
+            t = threading.Thread(target=send2servers,
+                                 args=(server_list, msg2server),
+                                 daemon=True)
+            t.start()
+        # # # # # # # # # # #  END OF RM TO SEVER  # # # # # # # # # # #
+
         membership.remove(server)
         member_count -= 1
         membership_string = ", ".join(membership)
