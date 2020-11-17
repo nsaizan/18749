@@ -266,6 +266,8 @@ def serve_clients_and_replicas():
                 if is_primary_assignment_msg:
                     logger.info(f"Updating Replica Status to Primary")
                     WE_ARE_PRIMARY = True
+                    #If we are the primary, we must be ready.
+                    WE_ARE_READY = True
 
                 # Process send checkpoint messages
                 if is_send_cp_msg:
