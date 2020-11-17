@@ -78,7 +78,7 @@ def parse_checkpoint_message(logger, msg):
     ret_val = False
 
     if msg:
-        if "Checkpoint" in msg:
+        if ("Checkpoint" in msg) and ("You Must Send Checkpoint" not in msg):
             try: 
                 state = int(msg.split(')')[1])
                 cp_num = int(msg.split(')')[0].split('#')[1])
@@ -111,7 +111,7 @@ def parse_set_ready_message(logger, msg):
 
     if msg:
         if "Ready" in msg:
-            ret_val
+            ret_val = True
 
     return ret_val
 
@@ -159,11 +159,11 @@ def send_checkpoint(logger, num_enemies):
     global backup1, backup2
     global backup1_alive, backup2_alive
     global backup1_messenger, backup2_messenger
-
+    global WE_ARE_PRIMARY
     global cp_num
 
-    # Ensure we are the primary replica
-    if not WE_ARE_PRIMARY:
+    # Ensure that passive backups do not send checkpoints.
+    if (not ACTIVE_REPLICATION) and (not WE_ARE_PRIMARY):
         return
 
     # Repair connections if needed
@@ -173,11 +173,11 @@ def send_checkpoint(logger, num_enemies):
 
     val = repair_connections(logger, backups, statuses, messengers)
     backups, statuses, messengers = val
-
+    
     backup1, backup2 = backups
     backup1_alive, backup2_alive = statuses
     backup1_messenger, backup2_messenger = messengers
-
+    
     if backup1_alive:
         try:
             backup1_messenger.send(f"(Checkpoint#{cp_num}) {num_enemies}")
@@ -198,6 +198,9 @@ def serve_clients_and_replicas():
     global num_enemies
     global clients_lock
     global cp_num
+    global WE_ARE_PRIMARY
+    global WE_ARE_READY
+    global backup1_alive, backup2_alive
 
     force_send_cp = False
 
@@ -206,16 +209,15 @@ def serve_clients_and_replicas():
 
     try: 
         while(1):
-
             wait_for_clients()
-
+            
             #Give the main loop time to get more clients.
             time.sleep(SERVE_CLIENT_PERIOD)
-
+            
             clients_lock.acquire()
-
+           
             readable = select.select(clients,[],[],0)[0]
-
+            
             for conn in readable:
                 # Get the message from the client.
                 msg = messenger.recv(conn)
@@ -242,18 +244,23 @@ def serve_clients_and_replicas():
                     num_enemies = state
                     logger.info(f"Updating checkpoint count to: {cp_num_new}")
                     cp_num = cp_num_new
+                    logger.info(f"Setting Ready Flag to True")
                     WE_ARE_READY = True
 
                 # Process client messages
-                if is_client_msg and (WE_ARE_PRIMARY or (ACTIVE_REPLICATION and WE_ARE_READY)):
-                    # Process the attack
-                    logger.info(f"Before Request: S={num_enemies}")
-                    num_enemies = num_enemies - attack
-                    logger.info(f"After Request: S={num_enemies}")
+                if is_client_msg and (WE_ARE_PRIMARY or ACTIVE_REPLICATION):
 
-                    # Respond to the attack
-                    messenger.socket = conn
-                    messenger.send(f"(Req#{req_num}){num_enemies} FORMICS REMAIN")
+                    if WE_ARE_READY:
+                        # Process the attack
+                        logger.info(f"Before Request: S={num_enemies}")
+                        num_enemies = num_enemies - attack
+                        logger.info(f"After Request: S={num_enemies}")
+
+                        # Respond to the attack
+                        messenger.socket = conn
+                        messenger.send(f"(Req#{req_num}){num_enemies} FORMICS REMAIN")
+                    else:
+                        logger.warning(f"Received Req#{req_num}, but not ready.")
 
                 # Process primary assignment messages
                 if is_primary_assignment_msg:
@@ -264,6 +271,11 @@ def serve_clients_and_replicas():
                 if is_send_cp_msg:
                     logger.info(f"Force Sending Checkpoint")
                     force_send_cp = True
+                    #time.sleep(0.5)
+                    #If we need to force-send a cp, at least one server has died
+                    #and come back to life.
+                    backup1_alive = False;
+                    backup2_alive = False;
 
                 # Process set ready messages
                 if is_set_ready_msg:
@@ -272,8 +284,9 @@ def serve_clients_and_replicas():
 
             # Send a checkpoint to backups
             # NOTE THAT this is outside the above for loop, so we are in a
-            # quiescent state before sending the checkpoint. 
+            # quiescent state before sending the checkpoint.
             if (not ACTIVE_REPLICATION and its_time_to_send_cp()) or force_send_cp:
+                logger.info(f"Executing send_checkpoint()")
                 send_checkpoint(logger, num_enemies)
                 
                 force_send_cp = False

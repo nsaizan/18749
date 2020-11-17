@@ -91,21 +91,22 @@ def main():
     
         # Bundle all server variables
         server_list = [s1, s2, s3]
-        server_status_list = [s1_alive, s2_alive, s3_alive]
+        server_status_list =  [False, False, False] # [s1_alive, s2_alive, s3_alive]
         server_messenger_list = [s1_messenger, s2_messenger, s3_messenger]
+        
+        # Get user input
+        attack_value = input("What is your next attack?\n")
 
         # Repair the server connections
         vals = repair_connections(server_list, server_status_list, server_messenger_list)
         server_list, server_status_list, server_messenger_list = vals
-
+        
         # Update server variables
         s1, s2, s3 = server_list
         s1_alive, s2_alive, s3_alive = server_status_list
         s1_messenger, s2_messenger, s3_messenger = server_messenger_list
 
-        # Get user input
-        attack_value = input("What is your next attack?\n")
-
+        
         # Check if user requested to exit
         if (attack_value in ['exit', 'close', 'quit']):
             print("INFO: Closing connection")
@@ -133,15 +134,16 @@ def main():
         if s2_alive:
             try:
                 #IN PASSIVE REPLICATION, DO NOT SEND TO S2
-                if ACTIVE_REPLICATION:
-                    s2_messenger.send(f"(Req#{request_num}) {attack_value}")
+                #if ACTIVE_REPLICATION:
+                s2_messenger.send(f"(Req#{request_num}) {attack_value}")
             except Exception:
+                print('s2_not_alive')
                 s2_alive = 0
         if s3_alive:
             try:
                 #IN PASSIVE REPLICATION, DO NOT SEND TO S3
-                if ACTIVE_REPLICATION:
-                    s3_messenger.send(f"(Req#{request_num}) {attack_value}")
+                #if ACTIVE_REPLICATION:
+                s3_messenger.send(f"(Req#{request_num}) {attack_value}")
             except Exception:
                 s3_alive = 0
 
@@ -150,19 +152,19 @@ def main():
                               args=(s1_alive, s1_messenger, s1),
                               daemon=True)
         #IN PASSIVE REPLICATION, DO NOT SEND TO S2 OR S3
-        if ACTIVE_REPLICATION:
-            t2 = threading.Thread(target=listen2server,
-                                  args=(s2_alive, s2_messenger, s2),
-                                  daemon=True)
-            t3 = threading.Thread(target=listen2server,
-                                  args=(s3_alive, s3_messenger, s3),
-                                  daemon=True)
+        #if ACTIVE_REPLICATION:
+        t2 = threading.Thread(target=listen2server,
+                              args=(s2_alive, s2_messenger, s2),
+                              daemon=True)
+        t3 = threading.Thread(target=listen2server,
+                              args=(s3_alive, s3_messenger, s3),
+                              daemon=True)
         t1.start()
 
         #IN PASSIVE REPLICATION, DO NOT SEND TO S2 OR S3
-        if ACTIVE_REPLICATION:
-            t2.start()
-            t3.start()
+        #if ACTIVE_REPLICATION:
+        t2.start()
+        t3.start()
         
         #Wait for a little bit to get the response before prompting the user
         #again.
