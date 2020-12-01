@@ -147,6 +147,7 @@ def main():
         # Connect to the server on the HB socket.
         while(hb_socket.connect_ex((HOST, ports[MY_SERVER+"_HB"]))):
             lfd_logger.warning("HB port not available.")
+            # TODO: actively spawn server replica
             time.sleep(1)
 
         lfd_logger.info('HB connection established')

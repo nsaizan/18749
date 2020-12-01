@@ -81,6 +81,8 @@ def repair_connections(servers, statuses, messengers):
     return servers, statuses, messengers
 
 def main():
+    # TODO: add command for repeats
+    
     # Run until client closes the connection
     while (True):
         global s1, s2, s3
