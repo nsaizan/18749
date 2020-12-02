@@ -28,7 +28,7 @@ from ports  import ports
 # # GLOBAL VARIABLES  # #
 # # # # # # # # # # # # #
 
-REPEAT_MODE = False; 
+REPEAT_MODE = True; 
 
 to_be_receive = []
 request_num = 0

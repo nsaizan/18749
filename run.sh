@@ -1,3 +1,5 @@
+#!/bin/sh
+
 export PYTHONPATH="${PYTHONPATH}:$PWD"
 
 #gnome-terminal -e "bash -c \"python3 $PWD/replication-manager/replication-manager.py;exec bash\"" --title="RM"

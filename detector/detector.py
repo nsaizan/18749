@@ -11,6 +11,7 @@ import threading
 import time
 import sys
 import traceback
+import subprocess
 sys.path.append("..")
 
 # Custom imports
@@ -18,6 +19,7 @@ from helper import Logger
 from helper import Messenger
 from ports  import ports
 from ports  import HOST
+from ports  import AUTO_RESPAWN
 
 
 #In units of the heartbeat period.
@@ -136,10 +138,19 @@ def main():
 
         hb_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
+        # Avoid respawning too many replicas on startup
+        initialized = False
+        
         # Connect to the server on the HB socket.
         while(hb_socket.connect_ex((HOST, ports[MY_SERVER+"_HB"]))):
             lfd_logger.warning("HB port not available.")
-            #Actively spawn server replica
+
+            # Respawn server replica
+            if(initialized and AUTO_RESPAWN):
+                lfd_logger.warning(f"Respawning {MY_SERVER}")
+                subprocess.call([f"./respawn_replica.sh", f"{replica_num}"])
+            
+            initialized = True
             time.sleep(3)
 
         lfd_logger.info('HB connection established')
