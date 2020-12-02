@@ -166,7 +166,7 @@ def main():
                         
             
                 
-        except Exception as e: 
+        except: 
             traceback.print_exc()
             s.close() #Gracefully exit by closing s & all connections.
             return
