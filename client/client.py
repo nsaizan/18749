@@ -10,6 +10,7 @@ import socket
 import time
 import sys
 import threading
+import random
 sys.path.append("..")
 
 # Custom imports
@@ -26,6 +27,9 @@ from ports  import ports
 # # # # # # # # # # # # #
 # # GLOBAL VARIABLES  # #
 # # # # # # # # # # # # #
+
+REPEAT_MODE = False; 
+
 to_be_receive = []
 request_num = 0
 
@@ -90,6 +94,7 @@ def main():
         global s1_messenger, s2_messenger, s3_messenger
         global client_num
         global request_num
+        global REPEAT_MODE
     
         # Bundle all server variables
         server_list = [s1, s2, s3]
@@ -97,7 +102,11 @@ def main():
         server_messenger_list = [s1_messenger, s2_messenger, s3_messenger]
         
         # Get user input
-        attack_value = input("What is your next attack?\n")
+        if REPEAT_MODE:
+            attack_value = random.randint(0,5)
+            time.sleep(random.random()/2)
+        else:
+            attack_value = input("What is your next attack?\n")
 
         # Repair the server connections
         vals = repair_connections(server_list, server_status_list, server_messenger_list)
@@ -108,6 +117,10 @@ def main():
         s1_alive, s2_alive, s3_alive = server_status_list
         s1_messenger, s2_messenger, s3_messenger = server_messenger_list
 
+        # Check if the user is putting the client into repeat mode:
+        if (attack_value in ['r']):
+            REPEAT_MODE = True;
+            continue
         
         # Check if user requested to exit
         if (attack_value in ['exit', 'close', 'quit']):
@@ -121,7 +134,7 @@ def main():
             break
 
         # Check user input format
-        if (attack_value.isdecimal() == False):
+        if type(attack_value) is not int and (attack_value.isdecimal() == False):
             print("ERROR: Input must be a valid integer")
             continue
 
@@ -153,8 +166,7 @@ def main():
         t1 = threading.Thread(target=listen2server,
                               args=(s1_alive, s1_messenger, s1),
                               daemon=True)
-        #IN PASSIVE REPLICATION, DO NOT SEND TO S2 OR S3
-        #if ACTIVE_REPLICATION:
+
         t2 = threading.Thread(target=listen2server,
                               args=(s2_alive, s2_messenger, s2),
                               daemon=True)
@@ -163,8 +175,7 @@ def main():
                               daemon=True)
         t1.start()
 
-        #IN PASSIVE REPLICATION, DO NOT SEND TO S2 OR S3
-        #if ACTIVE_REPLICATION:
+
         t2.start()
         t3.start()
         
@@ -185,8 +196,11 @@ if __name__ == '__main__':
         raise ValueError("No Client Number Provided!")
     
     if len(sys.argv) > 2:
-        raise ValueError("Too Many CLI Arguments!")
+       REPEAT_MODE = int(sys.argv[2])
 
+    if len(sys.argv) > 3:
+        raise ValueError("Too Many CLI Arguments!")
+    
     client_num = int(sys.argv[1])
 
     # Open the connection to the server.

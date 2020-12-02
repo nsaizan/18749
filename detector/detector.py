@@ -19,14 +19,6 @@ from helper import Messenger
 from ports  import ports
 from ports  import HOST
 
-# # # # # # # # # # # # #
-# LFD HOST & PORT SETTINGS  #
-# # # # # # # # # # # # #
-#HOST = '127.0.0.1'     # Host for the server (this PC)
-#PORT = 36337           # Main Server Port
-#LFD_HOST = '127.0.0.1' # Local Fault Detector should be on this machine.
-#LFD_HB_PORT = 36338    # Heartbeat port (LFD->S)
-#LFD_R_PORT = 36339     # Heartbeat receipt port (S->LFD)
 
 #In units of the heartbeat period.
 #i.e. for a value of 5, the detector will time out if 5 heartbeat periods
@@ -147,8 +139,8 @@ def main():
         # Connect to the server on the HB socket.
         while(hb_socket.connect_ex((HOST, ports[MY_SERVER+"_HB"]))):
             lfd_logger.warning("HB port not available.")
-            # TODO: actively spawn server replica
-            time.sleep(1)
+            #Actively spawn server replica
+            time.sleep(3)
 
         lfd_logger.info('HB connection established')
         hb_messenger.socket = hb_socket

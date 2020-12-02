@@ -41,6 +41,11 @@ backup1, backup2 = None, None
 backup1_alive, backup2_alive = False, False
 backup1_messenger, backup2_messenger = None, None
 
+#Logs used to store the value and ID of recent messages if we are
+#not ready to process them.
+message_value_log = []
+message_id_log    = [] #IDs are a tuple of the form (from, msg#)
+
 # Active Replication Quiescense Flag
 WE_ARE_READY = False
 
@@ -51,6 +56,42 @@ WE_ARE_PRIMARY = False
 # # # # # # # # # # # # #
 # THREAD FUNCTION DEFNS #
 # # # # # # # # # # # # #
+
+# This function "processes" all messages in the log, updating the server
+# state (num_enemies) as if these messages had been received.. 
+def process_log(logger):
+    global num_enemies
+    global message_value_log
+    global message_id_log
+
+    num_enemies = num_enemies - sum(message_value_log)
+
+    if message_id_log:
+        logger.info(f"PROCESSING Log Entries From {message_id_log[0]} to {message_id_log[-1]}")
+        logger.info(f"{len(message_value_log)} entries totaling {sum(message_value_log)}")
+        
+    message_value_log = []
+    message_id_log = []
+
+# This function deletes all log entries that come before recent_msg, including recent_msg.
+def prune_log(logger, recent_msg_id):
+    global num_enemies
+    global message_value_log
+    global message_id_log
+
+    try:
+        recent_index = message_id_log.index(recent_msg_id)
+    except ValueError:
+        recent_index = len(message_id_log)
+
+    logger.info(f"PURGING Log Entries up to {recent_msg_id}.") 
+    message_value_log = message_value_log[recent_index+1:]
+    message_id_log = message_id_log[recent_index+1:]
+    
+    assert(len(message_id_log) == len(message_value_log))
+    
+    logger.info(f"{len(message_id_log)} entries remain.")
+
 
 def wait_for_clients():
     while(not clients):
@@ -75,18 +116,23 @@ def parse_client_message(logger, msg):
 def parse_checkpoint_message(logger, msg):
     state = None
     cp_num = None
+    last_client = None
+    last_attack = None
     ret_val = False
+    
 
     if msg:
         if ("Checkpoint" in msg) and ("You Must Send Checkpoint" not in msg):
             try: 
-                state = int(msg.split(')')[1])
+                state = int(msg.split(')')[1].split(',')[0])
                 cp_num = int(msg.split(')')[0].split('#')[1])
+                last_client = msg.split(',')[1]
+                last_attack = int(msg.split(',')[2])
                 ret_val = True
             except (IndexError, ValueError):
                 logger.error('Bad checkpoint message!')
 
-    return state, cp_num, ret_val
+    return state, cp_num, last_client, last_attack,  ret_val
 
 def parse_primary_assignment_message(logger, msg):
     ret_val = False
@@ -159,11 +205,12 @@ def send_checkpoint(logger, num_enemies):
     global backup1, backup2
     global backup1_alive, backup2_alive
     global backup1_messenger, backup2_messenger
-    global WE_ARE_PRIMARY
+    global WE_ARE_PRIMARY, WE_ARE_READY
     global cp_num
+    global message_id_log, message_value_log
 
-    # Ensure that passive backups do not send checkpoints.
-    if (not ACTIVE_REPLICATION) and (not WE_ARE_PRIMARY):
+    # Ensure that passive backups / unready replicas don't send cps.
+    if not WE_ARE_READY: #(not ACTIVE_REPLICATION) and (not WE_ARE_PRIMARY):
         return
 
     # Repair connections if needed
@@ -177,20 +224,30 @@ def send_checkpoint(logger, num_enemies):
     backup1, backup2 = backups
     backup1_alive, backup2_alive = statuses
     backup1_messenger, backup2_messenger = messengers
-    
+
+
+    if not message_id_log:
+        last_client_text = "Null,0"
+    else:
+        last_client_text = f"{message_id_log[-1][0]},{message_id_log[-1][1]}"
+        
     if backup1_alive:
         try:
-            backup1_messenger.send(f"(Checkpoint#{cp_num}) {num_enemies}")
+            backup1_messenger.send(f"(Checkpoint#{cp_num}) {num_enemies},{last_client_text}")
         except Exception:
             backup1_alive = False
     if backup2_alive:
         try:
-            backup2_messenger.send(f"(Checkpoint#{cp_num}) {num_enemies}")
+            backup2_messenger.send(f"(Checkpoint#{cp_num}) {num_enemies},{last_client_text}")
         except Exception:
             backup2_alive = False
 
     cp_num += 1
     logger.info(f"Incrementing checkpoint count to {cp_num}")
+
+    #After we've sent a checkpoint, clear the logs.
+    message_value_log = []
+    message_id_log = []
 
 # Function to serve a single client.
 def serve_clients_and_replicas():
@@ -201,6 +258,7 @@ def serve_clients_and_replicas():
     global WE_ARE_PRIMARY
     global WE_ARE_READY
     global backup1_alive, backup2_alive
+    global message_id_log, message_value_log
 
     force_send_cp = False
 
@@ -223,7 +281,7 @@ def serve_clients_and_replicas():
                 msg = messenger.recv(conn)
 
                 # Parse checkpoints
-                state, cp_num_new, is_cp = parse_checkpoint_message(logger, msg)
+                state, cp_num_new, last_client, last_attack, is_cp = parse_checkpoint_message(logger, msg)
 
                 # Parse client messages
                 attack, req_num, is_client_msg = parse_client_message(logger, msg)
@@ -244,13 +302,32 @@ def serve_clients_and_replicas():
                     num_enemies = state
                     logger.info(f"Updating checkpoint count to: {cp_num_new}")
                     cp_num = cp_num_new
-                    logger.info(f"Setting Ready Flag to True")
-                    WE_ARE_READY = True
+
+                    if WE_ARE_READY == False:
+                        if ACTIVE_REPLICATION:
+                            #If this is active replication, we'll never get another cp, so we
+                            #need to prune & process the log to get up to speed.
+
+                            prune_log(logger, (last_client, last_attack))
+                            process_log(logger)
+                            
+                            logger.info(f"Setting Ready Flag to True")
+                            WE_ARE_READY = True
+                            
+                        else:
+                            #If this is passive replication, we must be a backup, so we just prune
+                            #the log and continue waiting for the next cp.
+                            prune_log(logger, (last_client, last_attack))
+                        
 
                 # Process client messages
-                if is_client_msg and (WE_ARE_PRIMARY or ACTIVE_REPLICATION):
+                if is_client_msg:
 
-                    if WE_ARE_READY:
+                    #No matter what, we always log client messages.
+                    message_id_log.append((messenger.them, req_num))
+                    message_value_log.append(attack)
+
+                    if (WE_ARE_PRIMARY or ACTIVE_REPLICATION) and WE_ARE_READY:
                         # Process the attack
                         logger.info(f"Before Request: S={num_enemies}")
                         num_enemies = num_enemies - attack
@@ -259,12 +336,21 @@ def serve_clients_and_replicas():
                         # Respond to the attack
                         messenger.socket = conn
                         messenger.send(f"(Req#{req_num}){num_enemies} FORMICS REMAIN")
+                        
                     else:
-                        logger.warning(f"Received Req#{req_num}, but not ready.")
+                        logger.warning(f"Received and logged Req#{req_num}. (Not Ready.)")
+
+                    #Each client connection is 1-and-done.
+                    conn.close()
+                    clients.remove(conn)
 
                 # Process primary assignment messages
                 if is_primary_assignment_msg:
                     logger.info(f"Updating Replica Status to Primary")
+
+                    #Part of becoming the primary is clearing the log to get up to date.
+                    process_log(logger)
+                    
                     WE_ARE_PRIMARY = True
                     #If we are the primary, we must be ready.
                     WE_ARE_READY = True
@@ -273,7 +359,7 @@ def serve_clients_and_replicas():
                 if is_send_cp_msg:
                     logger.info(f"Force Sending Checkpoint")
                     force_send_cp = True
-                    #time.sleep(0.5)
+                    
                     #If we need to force-send a cp, at least one server has died
                     #and come back to life.
                     backup1_alive = False;
@@ -288,8 +374,9 @@ def serve_clients_and_replicas():
             # NOTE THAT this is outside the above for loop, so we are in a
             # quiescent state before sending the checkpoint.
             if (not ACTIVE_REPLICATION and its_time_to_send_cp()) or force_send_cp:
-                logger.info(f"Executing send_checkpoint()")
                 send_checkpoint(logger, num_enemies)
+
+                
                 
                 force_send_cp = False
 
