@@ -119,7 +119,7 @@ def main():
 
         # Check if the user is putting the client into repeat mode:
         if (attack_value in ['r']):
-            REPEAT_MODE = True;
+            REPEAT_MODE = True
             continue
         
         # Check if user requested to exit
