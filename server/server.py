@@ -23,6 +23,7 @@ from helper import Messenger
 from ports  import ports
 from ports  import HOST
 from ports  import ACTIVE_REPLICATION
+from ports  import CHAOS_MONKEY_CHANCE
 
 MY_NAME = "" # Determined at runtime.
 BACKUP1_NAME = ""
@@ -32,7 +33,7 @@ MAX_MSG_LEN = 1024 # Max number of bytes we're willing to receive at once.
 
 SERVE_CLIENT_PERIOD = 0.01 # seconds
 
-SEND_CP_PERIOD = 5 # seconds
+SEND_CP_PERIOD = 5 # seconds (default)
 
 cp_num = 0 # Checkpoint number
 last_cp_time = None # Last time we sent a checkpoint
@@ -277,6 +278,10 @@ def serve_clients_and_replicas():
             readable = select.select(clients,[],[],0)[0]
             
             for conn in readable:
+
+                if(random.random() < CHAOS_MONKEY_CHANCE):
+                    conn = 1/0; #YOLO!
+                
                 # Get the message from the client.
                 msg = messenger.recv(conn)
 
@@ -376,8 +381,6 @@ def serve_clients_and_replicas():
             if (not ACTIVE_REPLICATION and its_time_to_send_cp()) or force_send_cp:
                 send_checkpoint(logger, num_enemies)
 
-                
-                
                 force_send_cp = False
 
             clients_lock.release()
@@ -453,11 +456,15 @@ def main():
         
 if __name__ == '__main__':
 
+
     # Parse replica number from CLI
     if len(sys.argv) < 2:
         raise ValueError("No Replica Number Provided!")
 
-    if len(sys.argv) > 2:
+    if len(sys.argv) == 3:
+        SEND_CP_PERIOD = int(sys.argv[2])
+
+    if len(sys.argv) > 3:
         raise ValueError("Too Many CLI Arguments!")
 
     replica_num = int(sys.argv[1])
@@ -468,6 +475,8 @@ if __name__ == '__main__':
     server_numbers.remove(replica_num)
     BACKUP1_NAME = "S" + str(min(server_numbers))
     BACKUP2_NAME = "S" + str(max(server_numbers))
+
+    random.seed(ports[f"{MY_NAME}_HB"]+time.time())
 
     # Global variable num_enemies holds the number of enemies remaining.
     # This starts at 1000 and can be decremented by clients.

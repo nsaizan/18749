@@ -25,7 +25,7 @@ from ports  import AUTO_RESPAWN
 #In units of the heartbeat period.
 #i.e. for a value of 5, the detector will time out if 5 heartbeat periods
 #pass without receiving a receipt.
-NORMALIZED_TIMEOUT = 5
+NORMALIZED_TIMEOUT = 1
 
 MAX_MSG_LEN = 1024 #Max number of bytes we're willing to receive at once.
 

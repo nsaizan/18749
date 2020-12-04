@@ -3,6 +3,8 @@ ACTIVE_REPLICATION = False
 
 AUTO_RESPAWN = True
 
+CHAOS_MONKEY_CHANCE = 0.0001
+
 HOST = '127.0.0.1'
 
 ports = {
